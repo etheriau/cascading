@@ -46,7 +46,8 @@ import org.slf4j.LoggerFactory;
  * <p/>
  * It is the counterpart to {@link cascading.tap.MultiSourceTap}.
  */
-public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Config, Output> implements CompositeTap<Child>
+public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Config, Output>
+  implements CompositeTap<Child>
   {
   /** Field LOG */
   private static final Logger LOG = LoggerFactory.getLogger( MultiSinkTap.class );
@@ -252,10 +253,12 @@ public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Con
 
     Set<Comparable> fieldNames = new LinkedHashSet<Comparable>();
 
+    Child[] taps = getTaps();
+
     boolean useAll = false;
-    for( int i = 0; i < getTaps().length; i++ )
+    for( int i = 0, sz = taps.length; i < sz; i++ )
       {
-      Fields fields = getTaps()[ i ].getSinkFields();
+        Fields fields = taps[ i ].getSinkFields();
       if ( fields.isAll() ) {
         useAll = true;
         break;
@@ -266,7 +269,24 @@ public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Con
 
     Fields allFields = useAll ? Fields.ALL : new Fields( fieldNames.toArray( new Comparable[ fieldNames.size() ] ) );
 
-    setScheme( new NullScheme( allFields, allFields ) );
+    setScheme( new NullScheme( allFields, allFields ) {
+      @Override
+      public void setSourceFields( Fields fields ) {
+        Child[] taps = getTaps();
+        for( int i = 0, sz = taps.length; i < sz; i++ ) {
+          taps[i].getScheme().setSourceFields( fields );
+        }
+      }
+
+
+      @Override
+      public void setSinkFields( Fields fields ) {
+        Child[] taps = getTaps();
+        for( int i = 0, sz = taps.length; i < sz; i++ ) {
+          taps[i].getScheme().setSourceFields( fields );
+        }
+      }
+    });
 
     return super.getScheme();
     }
