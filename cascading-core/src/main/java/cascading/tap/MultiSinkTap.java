@@ -283,7 +283,7 @@ public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Con
       public void setSinkFields( Fields fields ) {
         Child[] taps = getTaps();
         for( int i = 0, sz = taps.length; i < sz; i++ ) {
-          taps[i].getScheme().setSourceFields( fields );
+          taps[i].getScheme().setSinkFields( fields );
         }
       }
     });
