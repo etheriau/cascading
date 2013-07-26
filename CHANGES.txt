@@ -2,8 +2,29 @@ Cascading Change Log
 
 2.2.0 [unreleased]
 
+  Changed regex j.u.r.Pattern builder methods on c.s.u.DelimitedParser from static to instance methods.
+
+  Updated c.t.TupleEntry to issue a warning if an "unmodifiable" c.t.Tuple is set via #setTuple() on a "modifiable"
+  TupleEntry instance. This typically is an indicator the Tuple instance is about to be cached and/or modified at a
+  later point. Unmodifiable, system created, Tuples should never be cached.
+
+  Added c.t.TupleEntry#selectInto() to provide a more efficient way to copy values from one c.t.Tuple into another.
+
+  Added c.t.TupleEntry#selectTupleCopy() and #selectEntryCopy method to always provide a modifiable and cacheable
+  instance.
+
+  Fixed issue where c.t.TupleEntry#selectTuple() and #selectEntry() could return a unmodifiable or un-cacheable
+  c.t.Tuple or TupleEntry depending on the given c.t.Fields selector.
+
+  Fixed issue where c.t.MultiSourceTap could keep too many open resources if #openForRead() is called directly.
+
+  Fixed issue where c.o.Buffer#flush() was never called.
+
+  Fixed issue where an exception at #close() on step state reader could mask more prominent errors.
+
   Fixed issue where the c.t.TupleEntryCollector was not set to "null" on the c.o.OperationCall before
   c.o.Operation#cleanup() was called to prevent the method from emitting values during cleanup. See Operation#flush().
+  Use "cascading.compatibility.retain.collector" to disable.
 
   Fixed issue where c.f.h.ProcessFlow would not honor c.f.FlowListener instances. Currently does not support
   the #onThrowable event.

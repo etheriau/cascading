@@ -28,6 +28,8 @@ import java.util.Iterator;
 import cascading.tuple.coerce.Coercions;
 import cascading.tuple.type.CoercibleType;
 import cascading.util.ForeverValueIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Class TupleEntry allows a {@link Tuple} instance and its declaring {@link Fields} instance to be used as a single object.
@@ -52,6 +54,8 @@ import cascading.util.ForeverValueIterator;
  */
 public class TupleEntry
   {
+  private static final Logger LOG = LoggerFactory.getLogger( TupleEntry.class );
+
   private static final CoercibleType[] EMPTY_COERCIONS = new CoercibleType[ 0 ];
   private static final ForeverValueIterator<CoercibleType> OBJECT_ITERATOR = new ForeverValueIterator<CoercibleType>( Coercions.OBJECT );
 
@@ -220,6 +224,8 @@ public class TupleEntry
 
   /**
    * Constructor TupleEntry creates a new TupleEntry instance that is a safe copy of the given tupleEntry.
+   * <p/>
+   * The new instance is safe to cache and will be modifiable regardless of the given tupleEntry state.
    *
    * @param tupleEntry of type TupleEntry
    */
@@ -248,6 +254,9 @@ public class TupleEntry
 
   private void setCoercions()
     {
+    if( coercions != EMPTY_COERCIONS )
+      return;
+
     Fields fields = getFields();
     Type[] types = fields.types; // safe to not get a copy
     int size = fields.size();
@@ -343,13 +352,22 @@ public class TupleEntry
     }
 
   /**
-   * Method setTuple sets the tuple of this TupleEntry object.
+   * Method setTuple sets the tuple of this TupleEntry object, no copy will be performed.
+   * <p/>
+   * If the given tuple is "unmodifiable" ({@code Tuple.isUnmodifiable() == true}) and this TupleEntry is
+   * not "unmodifiable", a warning will be issued.
+   * <p/>
+   * Unmodifiable tuples are generally owned by the system and cannot be be changed and must not be cached.
    *
    * @param tuple the tuple of this TupleEntry object.
    */
   public void setTuple( Tuple tuple )
     {
-    if( isUnmodifiable )
+    // todo: 2.3 make this an exception
+    if( !isUnmodifiable && tuple.isUnmodifiable() )
+      LOG.warn( "current entry is modifiable but given tuple is not modifiable, post 2.2 this will be an exception" );
+
+    if( tuple != null && isUnmodifiable )
       this.tuple = Tuples.asUnmodifiable( tuple );
     else
       this.tuple = tuple;
@@ -709,51 +727,94 @@ public class TupleEntry
     }
 
   /**
-   * Method selectEntry selects the fields specified in selector from this instance.
+   * Method selectEntry selects the fields specified in the selector from this instance. If {@link Fields#ALL} or the
+   * same fields as declared are given, {@code this} will be returned.
+   * <p/>
+   * The returned TupleEntry will be either modifiable or unmodifiable, depending on the state of this TupleEntry instance.
+   * <p/>
+   * See {@link #selectEntryCopy(Fields)} to guarantee a copy suitable for modifying or caching/storing in a collection.
+   * <p/>
+   * Note this is a bug fix and change from 2.0 and 2.1. In previous versions the modifiable state was dependent
+   * on the given selector.
    *
    * @param selector Fields selector that selects the values to return
    * @return TupleEntry
    */
   public TupleEntry selectEntry( Fields selector )
     {
-    if( selector == null || selector.isAll() || fields == selector )
+    if( selector == null || selector.isAll() || fields == selector ) // == is intentional
       return this;
 
     if( selector.isNone() )
-      return TupleEntry.NULL;
+      return isUnmodifiable ? TupleEntry.NULL : new TupleEntry();
+
+    return new TupleEntry( Fields.asDeclaration( selector ), tuple.get( this.fields, selector ), isUnmodifiable );
+    }
+
+  /**
+   * Method selectEntry selects the fields specified in selector from this instance.
+   * <p/>
+   * It is guaranteed to return a new modifiable TupleEntry instance at a cost of copying data.
+   * <p/>
+   * The returned instance is safe to cache.
+   *
+   * @param selector Fields selector that selects the values to return
+   * @return TupleEntry
+   */
+  public TupleEntry selectEntryCopy( Fields selector )
+    {
+    if( selector == null || selector.isAll() || fields == selector ) // == is intentional
+      return new TupleEntry( this );
+
+    if( selector.isNone() )
+      return new TupleEntry();
 
     return new TupleEntry( Fields.asDeclaration( selector ), tuple.get( this.fields, selector ) );
     }
 
   /**
-   * Method selectTuple selects the fields specified in selector from this instance.
+   * Method selectTuple selects the fields specified in the selector from this instance. If {@link Fields#ALL} or the
+   * same fields as declared are given, {@code this.getTuple()} will be returned.
    * <p/>
-   * This method may return the underlying Tuple instance without copying it. See {@link #selectTupleCopy(Fields)}
-   * to guarantee a copy suitable for modifying or caching/storing in a local collection.
+   * The returned Tuple will be either modifiable or unmodifiable, depending on the state of this TupleEntry instance.
+   * <p/>
+   * See {@link #selectTupleCopy(Fields)} to guarantee a copy suitable for modifying or caching/storing in a collection.
+   * <p/>
+   * Note this is a bug fix and change from 2.0 and 2.1. In previous versions the modifiable state was dependent
+   * on the given selector.
    *
    * @param selector Fields selector that selects the values to return
    * @return Tuple
    */
   public Tuple selectTuple( Fields selector )
     {
-    if( selector == null || selector.isAll() || fields == selector )
+    if( selector == null || selector.isAll() || fields == selector ) // == is intentional
       return this.tuple;
 
     if( selector.isNone() )
       return Tuple.NULL;
 
-    return tuple.get( fields, selector );
+    Tuple result = tuple.get( fields, selector );
+
+    if( isUnmodifiable )
+      Tuples.asUnmodifiable( result );
+
+    return result;
     }
 
   /**
-   * Method selectTuple selects the fields specified in selector from this instance.
+   * Method selectTupleCopy selects the fields specified in selector from this instance.
+   * <p/>
+   * It is guaranteed to return a new modifiable Tuple instance at a cost of copying data.
+   * <p/>
+   * The returned instance is safe to cache.
    *
    * @param selector Fields selector that selects the values to return
    * @return Tuple
    */
   public Tuple selectTupleCopy( Fields selector )
     {
-    if( selector == null || selector.isAll() || fields == selector )
+    if( selector == null || selector.isAll() || fields == selector ) // == is intentional
       return new Tuple( this.tuple );
 
     if( selector.isNone() )
@@ -763,7 +824,36 @@ public class TupleEntry
     }
 
   /**
-   * Method setTuple sets the values specified by the selector to the values given by the given tuple.
+   * Method selectInto selects the fields specified in the selector from this instance and copies
+   * them into the given tuple argument.
+   *
+   * @param selector of type Fields
+   * @param tuple    of type Tuple
+   * @return returns the given tuple argument with new values added
+   */
+  public Tuple selectInto( Fields selector, Tuple tuple )
+    {
+    if( selector.isNone() )
+      return tuple;
+
+    int[] pos = this.tuple.getPos( fields, selector );
+
+    if( pos == null || pos.length == 0 )
+      {
+      tuple.addAll( this.tuple );
+      }
+    else
+      {
+      for( int i : pos )
+        tuple.add( this.tuple.getObject( i ) );
+      }
+
+    return tuple;
+    }
+
+  /**
+   * Method setTuple sets the values specified by the selector to the values given by the given tuple, the given
+   * values will always be copied into this TupleEntry.
    *
    * @param selector of type Fields
    * @param tuple    of type Tuple
@@ -771,12 +861,9 @@ public class TupleEntry
   public void setTuple( Fields selector, Tuple tuple )
     {
     if( selector == null || selector.isAll() )
-      {
-      this.tuple = tuple;
-      return;
-      }
-
-    this.tuple.set( fields, selector, tuple );
+      this.tuple.setAll( tuple );
+    else
+      this.tuple.set( fields, selector, tuple );
     }
 
   /**
