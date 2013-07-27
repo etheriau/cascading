@@ -94,31 +94,31 @@ public class ExpressionTest extends CascadingTestCase
       }
     }
 
-  private Comparable evaluate( String expression, TupleEntry tupleEntry )
+  private Object evaluate( String expression, TupleEntry tupleEntry )
     {
     ExpressionFunction function = getFunction( expression );
 
-    ConcreteCall<ExpressionOperation.Context> call = new ConcreteCall<ExpressionOperation.Context>();
+    ConcreteCall<ExpressionOperation.Context> call = new ConcreteCall<ExpressionOperation.Context>( tupleEntry.getFields(), function.getFieldDeclaration() );
     function.prepare( FlowProcess.NULL, call );
 
     return function.evaluate( call.getContext(), tupleEntry );
     }
 
-  private Comparable evaluate( String expression, Class type, TupleEntry tupleEntry )
+  private Object evaluate( String expression, Class type, TupleEntry tupleEntry )
     {
     ExpressionFunction function = getFunction( expression, type );
 
-    ConcreteCall<ExpressionOperation.Context> call = new ConcreteCall<ExpressionOperation.Context>();
+    ConcreteCall<ExpressionOperation.Context> call = new ConcreteCall<ExpressionOperation.Context>( tupleEntry.getFields(), function.getFieldDeclaration() );
     function.prepare( FlowProcess.NULL, call );
 
     return function.evaluate( call.getContext(), tupleEntry );
     }
 
-  private Comparable evaluate( String expression, String[] names, Class[] types, TupleEntry tupleEntry )
+  private Object evaluate( String expression, String[] names, Class[] types, TupleEntry tupleEntry )
     {
     ExpressionFunction function = getFunction( expression, names, types );
 
-    ConcreteCall<ExpressionOperation.Context> call = new ConcreteCall<ExpressionOperation.Context>();
+    ConcreteCall<ExpressionOperation.Context> call = new ConcreteCall<ExpressionOperation.Context>( tupleEntry.getFields(), function.getFieldDeclaration() );
     function.prepare( FlowProcess.NULL, call );
 
     return function.evaluate( call.getContext(), tupleEntry );

@@ -1,6 +1,100 @@
 Cascading Change Log
 
-2.1.6 [unreleased]
+2.2.0 [unreleased]
+
+  Fixed issue where the c.t.TupleEntryCollector was not set to "null" on the c.o.OperationCall before
+  c.o.Operation#cleanup() was called to prevent the method from emitting values during cleanup. See Operation#flush().
+
+  Fixed issue where c.f.h.ProcessFlow would not honor c.f.FlowListener instances. Currently does not support
+  the #onThrowable event.
+
+  Updated c.p.a.Unique to use c.o.b.FirstNBuffer to improve performance.
+
+  Added c.o.b.FirstNBuffer to provide a faster implementation of returning the first N tuples encountered in a grouping.
+
+  Updated junit to version 4.11.
+
+  Update default Apache Hadoop support to version 1.1.x. End support for 0.20.2.
+
+  Updated c.f.FlowDef to accept classpath elements that allow for pipe assemblies to load additional resources
+  from the current context j.l.ClassLoader.
+
+  Updated error messages in c.t.Fields, delegate property initialization to c.f.Flow sub-classes. @fderose
+
+  Removed Hadoop oro dependency from build and test runtime classpaths to stop transient build failures.
+
+  Added ability to pass System level properties into platform level property sets to override defaults during testing.
+
+  Fixed issue where c.t.l.FileTap#getFullIdentifier() was not returning the fully qualified path.
+
+  Added c.t.h.HfsProps to localize optional Hadoop HDFS specific properties, specifically provides properties for
+  enabling the combining of small files into larger splits.
+
+  Updated c.t.h.Hfs to allow for smaller files to be combined into fewer splits, thus fewer map tasks. @sjlee
+
+  Updated c.p.SubAssembly to support setting local and step properties via the c.p.ConfigDef.
+
+  Updated c.o.Buffer to allow implementations to disable nulling of non-grouping fields after the arguments iterator
+  has completed. This simplifies appending aggregated fields to the incoming tuple stream.
+
+  Updated c.t.Fields to retain relative positions when calling Fields#append.
+
+  Updated c.t.Fields to return appending value when calling Fields#append on Fields.NONE and optimized Fields#subtract
+  when subtracting Fields.NONE.
+
+  Added c.f.AssemblyPlanner interface to allow for platform independent generative c.f.Flow planning.
+
+  Fixed issue in local mode where an OOME could cause a cascading set of additional OOMEs making the jvm unstable.
+
+  Updated c.f.s.MemoryCoGroupGate and c.f.l.s.LocalGroupByGate to drain internal collections when pipelining
+  tuples downstream in the pipeline.
+
+  Added c.t.h.BigDecimalSerialization to allow Hadoop to serialize and deserialize j.m.BigDecimal instances.
+
+  Update slf4j to version 1.7.2.
+
+  Added coercion support for j.m.BigDecimal.
+
+  Added c.p.PlatformSuite annotation allowing a c.PlatformTestCase sub-class to be marked as being a JUnit suite
+  of tests accessible, by default, via a static "suite" method.
+
+  Updated provided c.s.Scheme subclasses to honor field type information.
+
+  Updated c.o.expression, c.o.aggregator, and c.p.assembly operations to honor field type information.
+
+  Updated c.o.Identity and c.p.a.Coerce to uses field type information during coercion.
+
+  Added c.t.t.CoercibleType interface to allow for customization of individual field data types and formats. Also
+  added the c.t.t.DateType implementation for managing string formatted dates to and from a long timestamp.
+
+  Updated c.p.Splice to fail during planning if grouping or merging fields do not share the same field types, unless
+  the field in question has a j.u.Comparator to handle the incompatible comparisons.
+
+  Fixed issue where a c.p.CoGroup join on Fields.NONE would fail during planning.
+
+  Updated c.p.a.Unique to optionally filter out null values.
+
+  Added c.o.e.ScriptFunction, ScriptTupleFunction, and c.o.e.ScriptFilter operations to allow for more expressive
+  Java scripts.
+
+  Added "test.platform.includes" system property so tests can be limited to specified platforms.
+
+  Added c.p.a.MaxBy and c.p.a.MinBy c.p.a.AggregateBy sub-classes to perform max and min, respectively. If the given
+  result fields declare a type, the result will be coerced to that type.
+
+  Updated c.p.a.SumBy and c.p.a.AverageBy to honor result fields type declaration by coercing the result to the
+  declared type.
+
+  Updated c.p.a.CountBy to count all value occurrences, non-null values, or only null values, within a grouping. Using
+  grouping Fields.NONE provides an efficient count for a set of columns. Counting distinct values is not supported.
+
+  Updated c.t.Fields to accept type information and to propagate type values along with fields.
+
+  Updated c.s.l.TextDelimited and c.s.h.TextDelimited to take c.s.u.DelimitedParser on the constructor to allow
+  for overriding parsing behavior. DelimitedParser now takes a c.s.u.FieldTypeResolver to allow for field name
+  permutations during source and sink, and type inference from field names.
+
+2.1.6
 
   Updated c.p.SubAssembly to throw UnsupportedOperationException on #getConfigDef() and #getStepConfigDef() calls.
 
@@ -76,6 +170,8 @@ Cascading Change Log
   Fixed issue where a c.f.FlowStep being skipped was not considered successful after 2.0.7 merge.
 
 2.1.0
+
+  Added c.t.t.FileType interface to mark specific platform c.t.Tap classes as representing a file like interface.
 
   Fixed issue where c.p.a.Coerce would coerce a null value to 0 if the coerce type was a j.l.Number
   instead of a numeric primitive, or false if the coerce type was j.l.Boolean instead of boolean.

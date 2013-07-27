@@ -51,6 +51,7 @@ public class LocalStepRunner implements Callable<Throwable>
 
   private final StreamGraph graph;
   private final Collection<Duct> heads;
+  private Throwable throwable = null;
 
   public LocalStepRunner( FlowProcess<Properties> flowProcess, LocalFlowStep step )
     {
@@ -74,6 +75,11 @@ public class LocalStepRunner implements Callable<Throwable>
     return successful;
     }
 
+  public Throwable getThrowable()
+    {
+    return throwable;
+    }
+
   @Override
   public Throwable call() throws Exception
     {
@@ -85,38 +91,52 @@ public class LocalStepRunner implements Callable<Throwable>
         {
         graph.prepare();
         }
-      catch( Exception exception )
+      catch( Throwable currentThrowable )
         {
-        LOG.error( "unable to prepare operation graph", exception );
+        if( !( currentThrowable instanceof OutOfMemoryError ) )
+          LOG.error( "unable to prepare operation graph", currentThrowable );
 
         complete = true;
         successful = false;
+        throwable = currentThrowable;
 
-        return exception;
-        }
-
-      Throwable throwable = null;
-      List<Future<Throwable>> futures = spawnHeads();
-
-      for( Future<Throwable> future : futures )
-        {
-        throwable = future.get();
-
-        if( throwable != null )
-          break;
+        return throwable;
         }
 
       try
         {
-        attemptedCleanup = true;
-        graph.cleanup();
+        List<Future<Throwable>> futures = spawnHeads();
+
+        for( Future<Throwable> future : futures )
+          {
+          throwable = future.get();
+
+          if( throwable != null )
+            break;
+          }
         }
-      catch( Exception exception )
+      catch( Throwable currentThrowable )
         {
-        LOG.error( "unable to cleanup operation graph", exception );
+        if( !( currentThrowable instanceof OutOfMemoryError ) )
+          LOG.error( "unable to complete step", currentThrowable );
+
+        throwable = currentThrowable;
+        }
+
+      try
+        {
+        attemptedCleanup = true; // set so we don't try again regardless
+
+        if( !( throwable instanceof OutOfMemoryError ) )
+          graph.cleanup();
+        }
+      catch( Throwable currentThrowable )
+        {
+        if( !( currentThrowable instanceof OutOfMemoryError ) )
+          LOG.error( "unable to cleanup operation graph", currentThrowable );
 
         if( throwable == null )
-          throwable = exception;
+          throwable = currentThrowable;
         }
 
       complete = true;
@@ -131,9 +151,15 @@ public class LocalStepRunner implements Callable<Throwable>
         if( !attemptedCleanup )
           graph.cleanup();
         }
-      catch( Exception exception )
+      catch( Throwable currentThrowable )
         {
-        LOG.error( "unable to cleanup operation graph", exception );
+        if( !( currentThrowable instanceof OutOfMemoryError ) )
+          LOG.error( "unable to cleanup operation graph", currentThrowable );
+
+        if( throwable == null )
+          throwable = currentThrowable;
+
+        successful = false;
         }
       }
     }

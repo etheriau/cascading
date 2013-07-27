@@ -22,26 +22,56 @@ package cascading.platform;
 
 import java.io.IOException;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 
 import cascading.flow.FlowConnector;
 import cascading.flow.FlowProcess;
 import cascading.scheme.Scheme;
+import cascading.scheme.util.FieldTypeResolver;
 import cascading.tap.SinkMode;
 import cascading.tap.Tap;
 import cascading.tuple.Fields;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  *
  */
 public abstract class TestPlatform
   {
+  private static final Logger LOG = LoggerFactory.getLogger( TestPlatform.class );
+
   public static final String CLUSTER_TESTING_PROPERTY = "test.cluster.enabled";
 
   private boolean useCluster = false;
   private boolean enableCluster = true;
   private int numMappers = 0;
   private int numReducers = 0;
+
+  /**
+   * Method getGlobalProperties fetches all "platform." prefixed system properties.
+   * <p/>
+   * Sub-classes of TestPlatform should use these values as overrides before returning from
+   * {@link #getProperties()}.
+   *
+   * @return a Map of properties
+   */
+  public static Map<Object, Object> getGlobalProperties()
+    {
+    HashMap<Object, Object> properties = new HashMap<Object, Object>();
+
+    for( String propertyName : System.getProperties().stringPropertyNames() )
+      {
+      if( propertyName.startsWith( "platform." ) )
+        properties.put( propertyName.substring( "platform.".length() ), System.getProperty( propertyName ) );
+      }
+
+    if( !properties.isEmpty() )
+      LOG.info( "platform property overrides: ", properties );
+
+    return properties;
+    }
 
   protected TestPlatform()
     {
@@ -100,6 +130,8 @@ public abstract class TestPlatform
 
   public abstract boolean remoteExists( String outputFile ) throws IOException;
 
+  public abstract boolean remoteRemove( String outputFile, boolean recursive ) throws IOException;
+
   public abstract FlowProcess getFlowProcess();
 
   public abstract FlowConnector getFlowConnector( Map<Object, Object> properties );
@@ -143,24 +175,48 @@ public abstract class TestPlatform
     return getDelimitedFile( fields, false, delimiter, "\"", null, filename, mode );
     }
 
+  @Deprecated
   public Tap getDelimitedFile( Fields fields, String filename, SinkMode mode )
     {
     return getDelimitedFile( fields, false, "\t", "\"", null, filename, mode );
     }
 
+  @Deprecated
   public Tap getDelimitedFile( Fields fields, boolean hasHeader, String filename, SinkMode mode )
     {
     return getDelimitedFile( fields, hasHeader, "\t", "\"", null, filename, mode );
     }
 
+  public Tap getTabDelimitedFile( Fields fields, String filename, SinkMode mode )
+    {
+    return getDelimitedFile( fields, false, "\t", "\"", null, filename, mode );
+    }
+
+  public Tap getTabDelimitedFile( Fields fields, boolean hasHeader, String filename, SinkMode mode )
+    {
+    return getDelimitedFile( fields, hasHeader, "\t", "\"", null, filename, mode );
+    }
+
+  public Tap getDelimitedFile( Fields fields, boolean hasHeader, String delimiter, String quote, String filename, SinkMode mode )
+    {
+    return getDelimitedFile( fields, hasHeader, delimiter, quote, null, filename, mode );
+    }
+
+  public Tap getDelimitedFile( Fields fields, String delimiter, String quote, String filename, SinkMode mode )
+    {
+    return getDelimitedFile( fields, false, delimiter, quote, null, filename, mode );
+    }
+
   public Tap getDelimitedFile( Fields fields, String delimiter, Class[] types, String filename, SinkMode mode )
     {
-    return getDelimitedFile( fields, false, delimiter, "", types, filename, mode );
+    return getDelimitedFile( fields, false, delimiter, "\"", types, filename, mode );
     }
 
   public abstract Tap getDelimitedFile( Fields fields, boolean hasHeader, String delimiter, String quote, Class[] types, String filename, SinkMode mode );
 
   public abstract Tap getDelimitedFile( Fields fields, boolean skipHeader, boolean writeHeader, String delimiter, String quote, Class[] types, String filename, SinkMode mode );
+
+  public abstract Tap getDelimitedFile( String delimiter, String quote, FieldTypeResolver fieldTypeResolver, String filename, SinkMode mode );
 
   public abstract Tap getTemplateTap( Tap sink, String pathTemplate, int openThreshold );
 

@@ -37,7 +37,6 @@ import java.util.Properties;
 import java.util.Set;
 
 import cascading.PlatformTestCase;
-import cascading.detail.PipeAssemblyTestBase;
 import junit.framework.Test;
 import org.junit.internal.runners.JUnit38ClassRunner;
 import org.junit.runner.Description;
@@ -61,11 +60,13 @@ import org.slf4j.LoggerFactory;
  */
 public class PlatformRunner extends ParentRunner<Runner>
   {
+  public static final String PLATFORM_INCLUDES = "test.platform.includes";
   public static final String PLATFORM_RESOURCE = "cascading/platform/platform.properties";
   public static final String PLATFORM_CLASSNAME = "platform.classname";
 
   private static final Logger LOG = LoggerFactory.getLogger( PlatformRunner.class );
 
+  private Set<String> includes = new HashSet<String>();
   private List<Runner> runners;
 
   @Retention(RetentionPolicy.RUNTIME)
@@ -78,7 +79,25 @@ public class PlatformRunner extends ParentRunner<Runner>
     {
     super( testClass );
 
+    setIncludes();
     makeRunners();
+    }
+
+  private void setIncludes()
+    {
+    String includesString = System.getProperty( PLATFORM_INCLUDES );
+
+    if( includesString == null || includesString.isEmpty() )
+      {
+      return;
+      }
+
+    String[] split = includesString.split( "," );
+
+    for( String include : split )
+      {
+      includes.add( include.trim().toLowerCase() );
+      }
     }
 
   public static TestPlatform makeInstance( Class<? extends TestPlatform> type )
@@ -121,7 +140,9 @@ public class PlatformRunner extends ParentRunner<Runner>
       classes = getPlatformClassesFromClasspath( javaClass.getClassLoader() );
 
     for( Class<? extends TestPlatform> platformClass : classes )
+      {
       addPlatform( javaClass, platformClass );
+      }
 
     return runners;
     }
@@ -172,19 +193,25 @@ public class PlatformRunner extends ParentRunner<Runner>
   private static Class<?> getPlatformClass( ClassLoader classLoader, Properties properties, InputStream stream ) throws IOException, ClassNotFoundException
     {
     if( stream == null )
+      {
       throw new IllegalStateException( "platform provider resource not found: " + PLATFORM_RESOURCE );
+      }
 
     properties.load( stream );
 
     String classname = properties.getProperty( PLATFORM_CLASSNAME );
 
     if( classname == null )
+      {
       throw new IllegalStateException( "platform provider value not found: " + PLATFORM_CLASSNAME );
+      }
 
     Class<?> type = classLoader.loadClass( classname );
 
     if( type == null )
+      {
       throw new IllegalStateException( "platform provider class not found: " + classname );
+      }
 
     return type;
     }
@@ -195,22 +222,35 @@ public class PlatformRunner extends ParentRunner<Runner>
 
     // test platform dependencies not installed, so skip
     if( testPlatform == null )
+      {
       return;
+      }
 
     final String platformName = testPlatform.getName();
+
+    if( !includes.isEmpty() && !includes.contains( platformName.toLowerCase() ) )
+      {
+      LOG.info( "ignoring platform: {}", platformName );
+      return;
+      }
 
     LOG.info( "installing platform: {}", platformName );
     LOG.info( "running test: {}", javaClass.getName() );
 
-    if( PipeAssemblyTestBase.class.isAssignableFrom( javaClass ) )
-      runners.add( makeSuiteRunner( javaClass, testPlatform ) );
+    PlatformSuite suiteAnnotation = javaClass.getAnnotation( PlatformSuite.class );
+    if( suiteAnnotation != null )
+      {
+      runners.add( makeSuiteRunner( javaClass, suiteAnnotation.method(), testPlatform ) );
+      }
     else
+      {
       runners.add( makeClassRunner( javaClass, testPlatform, platformName ) );
+      }
     }
 
-  private JUnit38ClassRunner makeSuiteRunner( Class<?> javaClass, final TestPlatform testPlatform ) throws Throwable
+  private JUnit38ClassRunner makeSuiteRunner( Class<?> javaClass, String suiteMethod, final TestPlatform testPlatform ) throws Throwable
     {
-    Method method = javaClass.getMethod( "suite", TestPlatform.class );
+    Method method = javaClass.getMethod( suiteMethod, TestPlatform.class );
 
     return new JUnit38ClassRunner( (Test) method.invoke( null, testPlatform ) );
     }

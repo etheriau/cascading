@@ -39,7 +39,7 @@ import org.apache.hadoop.io.serializer.Serializer;
  * by {@code byte} arrays ({@code byte[]}).
  * <p/>
  * To use, call<br/>
- * {@code TupleSerialization.addSerialization(properties, BytesSerialization.class.getName() );}
+ * {@code TupleSerializationProps.addSerialization(properties, BytesSerialization.class.getName() );}
  * <p/>
  * This class also implements {@link Comparison} so it is not required to set a {@link cascading.tuple.hadoop.util.BytesComparator}
  * when attempting to group on a byte array via GroupBy or CoGroup.
@@ -66,11 +66,11 @@ public class BytesSerialization extends Configured implements Comparison<byte[]>
       }
 
     @Override
-    public byte[] deserialize( byte[] testText ) throws IOException
+    public byte[] deserialize( byte[] existing ) throws IOException
       {
       int len = in.readInt();
 
-      byte[] bytes = new byte[ len ];
+      byte[] bytes = existing != null && existing.length == len ? existing : new byte[ len ];
 
       in.readFully( bytes );
 

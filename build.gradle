@@ -106,16 +106,23 @@ subprojects {
     classifier = 'tests'
   }
 
+  task testSourcesJar( type: Jar, dependsOn: classes ) {
+    from sourceSets.test.allSource
+    classifier = 'test-sources'
+  }
+
   artifacts {
     archives jar
     archives sourcesJar
     archives javadocJar
     archives testsJar
+    archives testSourcesJar
     testArtifacts testsJar
+    testArtifacts testSourcesJar
   }
 
   dependencies {
-    testCompile group: 'junit', name: 'junit', version: '4.8.2'
+    testCompile group: 'junit', name: 'junit', version: '4.11'
   }
 
   test {
@@ -199,19 +206,19 @@ task javadocAll( type: Javadoc ) {
     links = [
             'http://docs.oracle.com/javase/6/docs/api/',
             'http://dist.codehaus.org/janino/javadoc/',
-            'http://hadoop.apache.org/common/docs/r1.0.3/api/',
+            'http://hadoop.apache.org/common/docs/r1.0.4/api/',
             'http://junit.sourceforge.net/javadoc/'
     ]
   }
 }
 
-task prepareRelease( dependsOn: [ 'cascading-core:build', 'cascading-local:build', 'cascading-hadoop:build', 'cascading-xml:build', 'cascading-platform:build' ] )
+task prepareRelease( dependsOn: ['cascading-core:build', 'cascading-local:build', 'cascading-hadoop:build', 'cascading-xml:build', 'cascading-platform:build'] )
 
 prepareRelease << {
   logger.info( 'built all artifacts' )
 }
 
-task buildDist( dependsOn: [ prepareRelease, javadocAll ] ) << {
+task buildDist( dependsOn: [prepareRelease, javadocAll] ) << {
 
   def distDir = mkdir( "${rootDir}/build/dist" )
 

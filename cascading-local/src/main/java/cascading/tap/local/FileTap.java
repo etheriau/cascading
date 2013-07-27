@@ -34,6 +34,7 @@ import cascading.scheme.Scheme;
 import cascading.tap.SinkMode;
 import cascading.tap.Tap;
 import cascading.tap.local.io.TapFileOutputStream;
+import cascading.tap.type.FileType;
 import cascading.tuple.TupleEntryCollector;
 import cascading.tuple.TupleEntryIterator;
 import cascading.tuple.TupleEntrySchemeCollector;
@@ -45,7 +46,7 @@ import cascading.tuple.TupleEntrySchemeIterator;
  * FileTap must be used with the {@link cascading.flow.local.LocalFlowConnector} to create
  * {@link cascading.flow.Flow} instances that run in "local" mode.
  */
-public class FileTap extends Tap<Properties, InputStream, OutputStream>
+public class FileTap extends Tap<Properties, InputStream, OutputStream> implements FileType<Properties>
   {
   private final String path;
 
@@ -81,6 +82,12 @@ public class FileTap extends Tap<Properties, InputStream, OutputStream>
     }
 
   @Override
+  public String getFullIdentifier( Properties conf )
+    {
+    return new File( getIdentifier() ).getAbsoluteFile().toURI().toString();
+    }
+
+  @Override
   public TupleEntryIterator openForRead( FlowProcess<Properties> flowProcess, InputStream input ) throws IOException
     {
     if( input == null ) {
@@ -106,13 +113,7 @@ public class FileTap extends Tap<Properties, InputStream, OutputStream>
     return new TupleEntrySchemeCollector<Properties, OutputStream>( flowProcess, getScheme(), output, getIdentifier() );
     }
 
-  /**
-   * Method getSize returns the size of the file referenced by this tap.
-   *
-   * @param conf of type Properties
-   * @return The size of the file reference by this tap.
-   * @throws IOException
-   */
+  @Override
   public long getSize( Properties conf ) throws IOException
     {
     File file = new File( getIdentifier() );
@@ -153,5 +154,29 @@ public class FileTap extends Tap<Properties, InputStream, OutputStream>
   public long getModifiedTime( Properties conf ) throws IOException
     {
     return new File( getIdentifier() ).lastModified();
+    }
+
+  @Override
+  public boolean isDirectory( Properties conf ) throws IOException
+    {
+    return new File( getIdentifier() ).isDirectory();
+    }
+
+  @Override
+  public String[] getChildIdentifiers( Properties conf ) throws IOException
+    {
+    if( !resourceExists( conf ) )
+      return new String[ 0 ];
+
+    File file = new File( getIdentifier() );
+    String[] paths = file.list();
+
+    if( paths == null )
+      return new String[ 0 ];
+
+    for( int i = 0; i < paths.length; i++ )
+      paths[ i ] = new File( file, paths[ i ] ).getPath();
+
+    return paths;
     }
   }

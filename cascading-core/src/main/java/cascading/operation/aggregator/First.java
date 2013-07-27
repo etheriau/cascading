@@ -54,7 +54,7 @@ public class First extends ExtentBase
   /**
    * Selects and returns the first N argument Tuples encountered.
    *
-   * @param firstN
+   * @param firstN of type int
    */
   @ConstructorProperties({"firstN"})
   public First( int firstN )
@@ -81,6 +81,7 @@ public class First extends ExtentBase
    * Selects and returns the first N argument Tuples encountered.
    *
    * @param fieldDeclaration of type Fields
+   * @param firstN           of type int
    */
   @ConstructorProperties({"fieldDeclaration", "firstN"})
   public First( Fields fieldDeclaration, int firstN )

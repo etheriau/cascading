@@ -47,7 +47,7 @@ import org.codehaus.janino.ExpressionEvaluator;
  * Field names used in the expression should be valid Java variable names; for example, '+' or '-' are not allowed.
  * Also the use of a field name that begins with an upper-case character is likely to fail and should be avoided.
  */
-public class ExpressionFunction extends ExpressionOperation implements Function<ExpressionOperation.Context>
+public class ExpressionFunction extends ExpressionOperation implements Function<ScriptOperation.Context>
   {
   /**
    * Constructor ExpressionFunction creates a new ExpressionFunction instance.
@@ -111,7 +111,7 @@ public class ExpressionFunction extends ExpressionOperation implements Function<
   @Override
   public void operate( FlowProcess flowProcess, FunctionCall<ExpressionOperation.Context> functionCall )
     {
-    functionCall.getContext().tuple.set( 0, evaluate( functionCall.getContext(), functionCall.getArguments() ) );
-    functionCall.getOutputCollector().add( functionCall.getContext().tuple );
+    functionCall.getContext().result.set( 0, evaluate( functionCall.getContext(), functionCall.getArguments() ) );
+    functionCall.getOutputCollector().add( functionCall.getContext().result );
     }
   }

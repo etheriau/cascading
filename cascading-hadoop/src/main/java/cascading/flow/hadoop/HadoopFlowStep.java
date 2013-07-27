@@ -159,7 +159,7 @@ public class HadoopFlowStep extends BaseFlowStep<JobConf>
       }
 
     // perform last so init above will pass to tasks
-    String versionString = Version.getVersionString();
+    String versionString = Version.getRelease();
 
     if( versionString != null )
       conf.set( "cascading.version", versionString );
@@ -299,8 +299,6 @@ public class HadoopFlowStep extends BaseFlowStep<JobConf>
 
     if( fields.size() != 0 ) // allows fields.UNKNOWN to be used
       conf.setInt( property + ".size", fields.size() );
-
-    return;
     }
 
   private void initFromTraps( FlowProcess<JobConf> flowProcess, JobConf conf, Map<String, Tap> traps )

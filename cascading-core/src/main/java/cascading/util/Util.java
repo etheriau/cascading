@@ -28,6 +28,7 @@ import java.io.StringWriter;
 import java.io.Writer;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
+import java.lang.reflect.Type;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
@@ -63,10 +64,11 @@ public class Util
   private static final Logger LOG = LoggerFactory.getLogger( Util.class );
   private static final String HEXES = "0123456789ABCDEF";
 
-  /** This method creates a globally unique HEX value seeded by the given string. */
   public static synchronized String createUniqueID()
     {
-    return createID( UUID.randomUUID().toString() );
+    // creates a cryptographically secure random value
+    String value = UUID.randomUUID().toString();
+    return value.toUpperCase().replaceAll( "-", "" );
     }
 
   public static String createID( String rawID )
@@ -74,6 +76,12 @@ public class Util
     return createID( rawID.getBytes() );
     }
 
+  /**
+   * Method CreateID returns a HEX hash of the given bytes with length 32 characters long.
+   *
+   * @param bytes the bytes
+   * @return string
+   */
   public static String createID( byte[] bytes )
     {
     try
@@ -510,15 +518,27 @@ public class Util
   public static String captureDebugTrace( Class type )
     {
     StackTraceElement[] stackTrace = Thread.currentThread().getStackTrace();
+    Package packageName = type.getPackage();
+    String typeName = type.getName();
 
-    for( int i = 3; i < stackTrace.length; i++ )
+    boolean skip = true;
+
+    for( StackTraceElement stackTraceElement : stackTrace )
       {
-      StackTraceElement stackTraceElement = stackTrace[ i ];
+      String className = stackTraceElement.getClassName();
 
-      Package aPackage = type.getPackage();
-
-      if( aPackage != null && stackTraceElement.getClassName().startsWith( aPackage.getName() ) )
+      if( skip )
+        {
+        skip = !className.equals( typeName );
         continue;
+        }
+      else
+        {
+        if( packageName != null && stackTraceElement.getClassName().equals( typeName ) )
+          {
+          continue;
+          }
+        }
 
       return stackTraceElement.toString();
       }
@@ -620,6 +640,35 @@ public class Util
         }
       }
     return sinkModified;
+    }
+
+  public static String getTypeName( Type type )
+    {
+    if( type == null )
+      return null;
+
+    return type instanceof Class ? ( (Class) type ).getCanonicalName() : type.toString();
+    }
+
+  public static String[] typeNames( Type[] types )
+    {
+    String[] names = new String[ types.length ];
+
+    for( int i = 0; i < types.length; i++ )
+      names[ i ] = getTypeName( types[ i ] );
+
+    return names;
+    }
+
+  public static boolean containsNull( Object[] values )
+    {
+    for( Object value : values )
+      {
+      if( value == null )
+        return true;
+      }
+
+    return false;
     }
 
   public interface RetryOperator<T>

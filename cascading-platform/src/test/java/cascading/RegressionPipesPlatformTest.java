@@ -21,6 +21,7 @@
 package cascading;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -290,7 +291,7 @@ public class RegressionPipesPlatformTest extends PlatformTestCase
     getPlatform().copyFromLocal( inputFileLower );
 
     Tap source = getPlatform().getTextFile( new Fields( "line" ), inputFileLower );
-    Tap splitTap = getPlatform().getDelimitedFile( new Fields( "num", "char" ), getOutputPath( "intermediate" ), SinkMode.REPLACE );
+    Tap splitTap = getPlatform().getTabDelimitedFile( new Fields( "num", "char" ), getOutputPath( "intermediate" ), SinkMode.REPLACE );
 
     Function splitter = new RegexSplitter( new Fields( "num", "char" ), " " );
 
@@ -346,7 +347,7 @@ public class RegressionPipesPlatformTest extends PlatformTestCase
     getPlatform().copyFromLocal( inputFileLower );
 
     Tap source = getPlatform().getTextFile( new Fields( "line" ), inputFileLower );
-    Tap splitTap = getPlatform().getDelimitedFile( new Fields( "num", "char" ), getOutputPath( "splitintermediate" ), SinkMode.REPLACE );
+    Tap splitTap = getPlatform().getTabDelimitedFile( new Fields( "num", "char" ), getOutputPath( "splitintermediate" ), SinkMode.REPLACE );
 
     Function splitter = new RegexSplitter( new Fields( "num", "char" ), " " );
 
@@ -551,7 +552,7 @@ public class RegressionPipesPlatformTest extends PlatformTestCase
     getPlatform().copyFromLocal( inputFileJoined );
 
     Tap source = getPlatform().getDelimitedFile( Fields.UNKNOWN, "-", inputFileJoined );
-    Tap sink = getPlatform().getDelimitedFile( Fields.UNKNOWN, getOutputPath( "unknown-replace" ), SinkMode.REPLACE );
+    Tap sink = getPlatform().getTabDelimitedFile( Fields.UNKNOWN, getOutputPath( "unknown-replace" ), SinkMode.REPLACE );
 
     Pipe pipe = new Pipe( "test" );
 
@@ -573,5 +574,89 @@ public class RegressionPipesPlatformTest extends PlatformTestCase
 
     assertEquals( 1, results.size() );
     assertEquals( new Tuple( "value" ), results.iterator().next() );
+    }
+
+  @Test
+  public void testOOMEPreGroup() throws Exception
+    {
+    copyFromLocal( inputFileApache );
+
+    Tap source = getPlatform().getTextFile( inputFileApache );
+
+    Pipe pipe = new Pipe( "test" );
+
+    pipe = new Each( pipe, new Fields( "line" ), new TestFunction( new Fields( "insert" ), null )
+    {
+    @Override
+    protected void throwIntentionalException()
+      {
+      throw new OutOfMemoryError( "fake error" );
+      }
+    } );
+
+    Tap sink = getPlatform().getTextFile( getOutputPath( "oomepre" ), SinkMode.REPLACE );
+
+    Flow flow = getPlatform().getFlowConnector().connect( source, sink, pipe );
+
+    try
+      {
+      flow.complete();
+      fail( "no failure thrown" );
+      }
+    catch( Throwable exception )
+      {
+      System.out.println( "exception = " + exception );
+      exception.printStackTrace();
+      if( !getPlatform().isMapReduce() )
+        assertTrue( exception instanceof OutOfMemoryError );
+      }
+    }
+
+  @Test
+  public void testOOMEPostGroup() throws Exception
+    {
+    getPlatform().copyFromLocal( inputFileLower );
+    getPlatform().copyFromLocal( inputFileUpper );
+
+    Tap sourceLower = getPlatform().getTextFile( new Fields( "offset", "line" ), inputFileLower );
+    Tap sourceUpper = getPlatform().getTextFile( new Fields( "offset", "line" ), inputFileUpper );
+
+    Map sources = new HashMap();
+
+    sources.put( "lower", sourceLower );
+    sources.put( "upper", sourceUpper );
+
+    Tap sink = getPlatform().getTextFile( new Fields( "line" ), getOutputPath( "oomepost" ), SinkMode.REPLACE );
+
+    Function splitter = new RegexSplitter( new Fields( "num", "char" ), " " );
+
+    Pipe pipeLower = new Each( new Pipe( "lower" ), new Fields( "line" ), splitter );
+    Pipe pipeUpper = new Each( new Pipe( "upper" ), new Fields( "line" ), splitter );
+
+    Pipe splice = new CoGroup( pipeLower, new Fields( "num" ), pipeUpper, new Fields( "num" ), Fields.size( 4 ) );
+
+    splice = new Each( splice, Fields.NONE, new TestFunction( new Fields( "insert" ), null )
+    {
+    @Override
+    protected void throwIntentionalException()
+      {
+      throw new OutOfMemoryError( "fake error" );
+      }
+    } );
+
+    Flow flow = getPlatform().getFlowConnector().connect( sources, sink, splice );
+
+    try
+      {
+      flow.complete();
+      fail( "no failure thrown" );
+      }
+    catch( Throwable exception )
+      {
+      System.out.println( "exception = " + exception );
+      exception.printStackTrace();
+      if( !getPlatform().isMapReduce() )
+        assertTrue( exception instanceof OutOfMemoryError );
+      }
     }
   }

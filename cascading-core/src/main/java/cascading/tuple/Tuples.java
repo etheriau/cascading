@@ -20,9 +20,12 @@
 
 package cascading.tuple;
 
+import java.util.Collections;
 import java.util.List;
 
 import cascading.operation.OperationException;
+import cascading.tuple.coerce.Coercions;
+import cascading.tuple.type.CoercibleType;
 
 /**
  * Class Tuples is a helper class providing common methods to manipulate {@link Tuple} and {@link TupleEntry} instances.
@@ -32,6 +35,122 @@ import cascading.operation.OperationException;
  */
 public class Tuples
   {
+  /**
+   * A utility function for use with Janino expressions to get around its lack of support for varargs.
+   *
+   * @param a of type Object
+   * @return a new Tuple
+   */
+  public static Tuple tuple( Object a )
+    {
+    return new Tuple( a );
+    }
+
+  /**
+   * A utility function for use with Janino expressions to get around its lack of support for varargs.
+   *
+   * @param a of type Object
+   * @param b of type Object
+   * @return a new Tuple
+   */
+  public static Tuple tuple( Object a, Object b )
+    {
+    return new Tuple( a, b );
+    }
+
+  /**
+   * A utility function for use with Janino expressions to get around its lack of support for varargs.
+   *
+   * @param a of type Object
+   * @param b of type Object
+   * @param c of type Object
+   * @return a new Tuple
+   */
+  public static Tuple tuple( Object a, Object b, Object c )
+    {
+    return new Tuple( a, b, c );
+    }
+
+  /**
+   * A utility function for use with Janino expressions to get around its lack of support for varargs.
+   *
+   * @param a of type Object
+   * @param b of type Object
+   * @param c of type Object
+   * @param d of type Object
+   * @return a new Tuple
+   */
+  public static Tuple tuple( Object a, Object b, Object c, Object d )
+    {
+    return new Tuple( a, b, c, d );
+    }
+
+  /**
+   * A utility function for use with Janino expressions to get around its lack of support for varargs.
+   *
+   * @param a of type Object
+   * @param b of type Object
+   * @param c of type Object
+   * @param d of type Object
+   * @param e of type Object
+   * @return a new Tuple
+   */
+  public static Tuple tuple( Object a, Object b, Object c, Object d, Object e )
+    {
+    return new Tuple( a, b, c, d, e );
+    }
+
+  /**
+   * A utility function for use with Janino expressions to get around its lack of support for varargs.
+   *
+   * @param a of type Object
+   * @param b of type Object
+   * @param c of type Object
+   * @param d of type Object
+   * @param e of type Object
+   * @param f of type Object
+   * @return a new Tuple
+   */
+  public static Tuple tuple( Object a, Object b, Object c, Object d, Object e, Object f )
+    {
+    return new Tuple( a, b, c, d, e, f );
+    }
+
+  /**
+   * A utility function for use with Janino expressions to get around its lack of support for varargs.
+   *
+   * @param a of type Object
+   * @param b of type Object
+   * @param c of type Object
+   * @param d of type Object
+   * @param e of type Object
+   * @param f of type Object
+   * @param g of type Object
+   * @return a new Tuple
+   */
+  public static Tuple tuple( Object a, Object b, Object c, Object d, Object e, Object f, Object g )
+    {
+    return new Tuple( a, b, c, d, e, f, g );
+    }
+
+  /**
+   * A utility function for use with Janino expressions to get around its lack of support for varargs.
+   *
+   * @param a of type Object
+   * @param b of type Object
+   * @param c of type Object
+   * @param d of type Object
+   * @param e of type Object
+   * @param f of type Object
+   * @param g of type Object
+   * @param h of type Object
+   * @return a new Tuple
+   */
+  public static Tuple tuple( Object a, Object b, Object c, Object d, Object e, Object f, Object g, Object h )
+    {
+    return new Tuple( a, b, c, d, e, f, g, h );
+    }
+
   /**
    * Method asArray copies the elements of the given Tuple instance to the given Object array.
    *
@@ -61,6 +180,7 @@ public class Tuples
    * @param types of type Class[]
    * @return Object[]
    */
+  @Deprecated
   public static Object[] asArray( Tuple tuple, Class[] types )
     {
     return asArray( tuple, types, new Object[ tuple.size() ] );
@@ -75,6 +195,7 @@ public class Tuples
    * @param destination of type Object[]
    * @return Object[]
    */
+  @Deprecated
   public static Object[] asArray( Tuple tuple, Class[] types, Object[] destination )
     {
     if( tuple.size() != types.length )
@@ -84,6 +205,45 @@ public class Tuples
       destination[ i ] = coerce( tuple, i, types[ i ] );
 
     return destination;
+    }
+
+  public static Object[] asArray( Tuple tuple, CoercibleType[] coercions, Class[] types, Object[] destination )
+    {
+    if( tuple.size() != types.length )
+      throw new OperationException( "number of input tuple values: " + tuple.size() + ", does not match number of coercion types: " + types.length );
+
+    for( int i = 0; i < types.length; i++ )
+      destination[ i ] = coercions[ i ].coerce( tuple.getObject( i ), types[ i ] );
+
+    return destination;
+    }
+
+  /**
+   * Method frequency behaves the same as {@link Collections#frequency(java.util.Collection, Object)}.
+   * <p/>
+   * This method is a convenient way to test for all null values in a tuple.
+   *
+   * @param tuple of type Tuple
+   * @param value of type Object
+   * @return an int
+   */
+  public static int frequency( Tuple tuple, Object value )
+    {
+    return Collections.frequency( tuple.elements, value );
+    }
+
+  /**
+   * Method frequency behaves the same as {@link Collections#frequency(java.util.Collection, Object)}.
+   * <p/>
+   * This method is a convenient way to test for all null values in a tuple.
+   *
+   * @param tupleEntry of type TupleEntry
+   * @param value      of type Object
+   * @return an int
+   */
+  public static int frequency( TupleEntry tupleEntry, Object value )
+    {
+    return Collections.frequency( tupleEntry.getTuple().elements, value );
     }
 
   /**
@@ -98,6 +258,7 @@ public class Tuples
    * @param type  of type Class
    * @return returns the value coerced
    */
+  @Deprecated
   public static Object coerce( Tuple tuple, int pos, Class type )
     {
     Object value = tuple.getObject( pos );
@@ -105,185 +266,88 @@ public class Tuples
     return coerce( value, type );
     }
 
+  @Deprecated
   public static Object coerce( Object value, Class type )
     {
-    if( value != null && type == value.getClass() )
-      return value;
-
-    if( type == Object.class )
-      return value;
-
-    if( type == String.class )
-      return toString( value );
-
-    if( type == int.class )
-      return toInteger( value );
-
-    if( type == long.class )
-      return toLong( value );
-
-    if( type == double.class )
-      return toDouble( value );
-
-    if( type == float.class )
-      return toFloat( value );
-
-    if( type == short.class )
-      return toShort( value );
-
-    if( type == boolean.class )
-      return toBoolean( value );
-
-    if( type == Integer.class )
-      return toIntegerObject( value );
-
-    if( type == Long.class )
-      return toLongObject( value );
-
-    if( type == Double.class )
-      return toDoubleObject( value );
-
-    if( type == Float.class )
-      return toFloatObject( value );
-
-    if( type == Short.class )
-      return toShortObject( value );
-
-    if( type == Boolean.class )
-      return toBooleanObject( value );
-
-    if( type != null )
-      throw new OperationException( "could not coerce value, " + value + " to type: " + type.getName() );
-
-    return null;
+    return Coercions.coerce( value, type );
     }
 
+  @Deprecated
   public static final String toString( Object value )
     {
-    if( value == null )
-      return null;
-
-    return value.toString();
+    return Coercions.STRING.coerce( value );
     }
 
+  @Deprecated
   public static final int toInteger( Object value )
     {
-    if( value instanceof Number )
-      return ( (Number) value ).intValue();
-    else if( value == null )
-      return 0;
-    else
-      return Integer.parseInt( value.toString() );
+    return Coercions.INTEGER.coerce( value );
     }
 
+  @Deprecated
   public static final long toLong( Object value )
     {
-    if( value instanceof Number )
-      return ( (Number) value ).longValue();
-    else if( value == null )
-      return 0;
-    else
-      return Long.parseLong( value.toString() );
+    return Coercions.LONG.coerce( value );
     }
 
+  @Deprecated
   public static final double toDouble( Object value )
     {
-    if( value instanceof Number )
-      return ( (Number) value ).doubleValue();
-    else if( value == null )
-      return 0;
-    else
-      return Double.parseDouble( value.toString() );
+    return Coercions.DOUBLE.coerce( value );
     }
 
+  @Deprecated
   public static final float toFloat( Object value )
     {
-    if( value instanceof Number )
-      return ( (Number) value ).floatValue();
-    else if( value == null )
-      return 0;
-    else
-      return Float.parseFloat( value.toString() );
+    return Coercions.FLOAT.coerce( value );
     }
 
+  @Deprecated
   public static final short toShort( Object value )
     {
-    if( value instanceof Number )
-      return ( (Number) value ).shortValue();
-    else if( value == null )
-      return 0;
-    else
-      return Short.parseShort( value.toString() );
+    return Coercions.SHORT.coerce( value );
     }
 
+  @Deprecated
   public static final boolean toBoolean( Object value )
     {
-    if( value instanceof Boolean )
-      return ( (Boolean) value ).booleanValue();
-    else if( value == null )
-      return false;
-    else
-      return Boolean.parseBoolean( value.toString() );
+    return Coercions.BOOLEAN.coerce( value );
     }
 
+  @Deprecated
   public static final Integer toIntegerObject( Object value )
     {
-    if( value instanceof Number )
-      return ( (Number) value ).intValue();
-    else if( value == null || value.toString().isEmpty() )
-      return null;
-    else
-      return Integer.parseInt( value.toString() );
+    return Coercions.INTEGER_OBJECT.coerce( value );
     }
 
+  @Deprecated
   public static final Long toLongObject( Object value )
     {
-    if( value instanceof Number )
-      return ( (Number) value ).longValue();
-    else if( value == null || value.toString().isEmpty() )
-      return null;
-    else
-      return Long.parseLong( value.toString() );
+    return Coercions.LONG_OBJECT.coerce( value );
     }
 
+  @Deprecated
   public static final Double toDoubleObject( Object value )
     {
-    if( value instanceof Number )
-      return ( (Number) value ).doubleValue();
-    else if( value == null || value.toString().isEmpty() )
-      return null;
-    else
-      return Double.parseDouble( value.toString() );
+    return Coercions.DOUBLE_OBJECT.coerce( value );
     }
 
+  @Deprecated
   public static final Float toFloatObject( Object value )
     {
-    if( value instanceof Number )
-      return ( (Number) value ).floatValue();
-    else if( value == null || value.toString().isEmpty() )
-      return null;
-    else
-      return Float.parseFloat( value.toString() );
+    return Coercions.FLOAT_OBJECT.coerce( value );
     }
 
+  @Deprecated
   public static final Short toShortObject( Object value )
     {
-    if( value instanceof Number )
-      return ( (Number) value ).shortValue();
-    else if( value == null || value.toString().isEmpty() )
-      return 0;
-    else
-      return Short.parseShort( value.toString() );
+    return Coercions.SHORT_OBJECT.coerce( value );
     }
 
+  @Deprecated
   public static final Boolean toBooleanObject( Object value )
     {
-    if( value instanceof Boolean )
-      return (Boolean) value;
-    else if( value == null || value.toString().isEmpty() )
-      return null;
-    else
-      return Boolean.parseBoolean( value.toString() );
+    return Coercions.BOOLEAN_OBJECT.coerce( value );
     }
 
   /**
@@ -293,6 +357,7 @@ public class Tuples
    * @param types of type Class[]
    * @return Tuple
    */
+  @Deprecated
   public static Tuple coerce( Tuple tuple, Class[] types )
     {
     return new Tuple( (Object[]) asArray( tuple, types, new Object[ types.length ] ) );
@@ -308,6 +373,7 @@ public class Tuples
    * @param destination of type Tuple
    * @return Tuple
    */
+  @Deprecated
   public static Tuple coerce( Tuple tuple, Class[] types, Tuple destination )
     {
     if( tuple.size() != types.length )
@@ -336,7 +402,7 @@ public class Tuples
       {
       Tuple result = tupleEntry.tuple;
 
-      tupleEntry.tuple = Tuple.size( result.size() );
+      tupleEntry.setTuple( Tuple.size( result.size() ) );
 
       return result;
       }
@@ -347,7 +413,7 @@ public class Tuples
       }
     catch( Exception exception )
       {
-      throw new TupleException( "unable to select from: " + tupleEntry.fields.print() + ", using selector: " + selector.print(), exception );
+      throw new TupleException( "unable to select from: " + tupleEntry.getFields().printVerbose() + ", using selector: " + selector.printVerbose(), exception );
       }
     }
 
@@ -360,12 +426,12 @@ public class Tuples
    */
   public static Tuple extract( TupleEntry tupleEntry, Fields selector )
     {
-    return tupleEntry.tuple.extract( tupleEntry.fields.getPos( selector, tupleEntry.fields.size() ) );
+    return tupleEntry.tuple.extract( tupleEntry.getFields().getPos( selector, tupleEntry.getFields().size() ) );
     }
 
   public static Tuple nulledCopy( TupleEntry tupleEntry, Fields selector )
     {
-    return tupleEntry.tuple.nulledCopy( tupleEntry.fields.getPos( selector, tupleEntry.fields.size() ) );
+    return tupleEntry.tuple.nulledCopy( tupleEntry.getFields().getPos( selector, tupleEntry.getFields().size() ) );
     }
 
   public static Tuple nulledCopy( Fields declarator, Tuple tuple, Fields selector )

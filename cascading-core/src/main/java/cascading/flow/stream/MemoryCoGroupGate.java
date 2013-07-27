@@ -22,6 +22,7 @@ package cascading.flow.stream;
 
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Iterator;
 
 import cascading.flow.FlowProcess;
 import cascading.pipe.Splice;
@@ -71,40 +72,39 @@ public class MemoryCoGroupGate extends MemorySpliceGate
 
     next.start( this );
 
-    try
-      {
-      Collection<Tuple>[] collections = new Collection[ orderedPrevious.length ];
+    Collection<Tuple>[] collections = new Collection[ orderedPrevious.length ];
+    Iterator<Tuple> keyIterator = keys.iterator();
 
-      for( Tuple keysTuple : keys )
+    while( keyIterator.hasNext() )
+      {
+      Tuple keysTuple = keyIterator.next();
+
+      keyIterator.remove();
+
+      // drain the keys and keyValues collections to preserve memory
+      for( int i = 0; i < keyValues.length; i++ )
         {
-        // if key does not exist, #get will create an empty array list,
-        // and store the key, which is not a copy
-        for( int i = 0; i < keyValues.length; i++ )
-          {
-          if( keyValues[ i ].containsKey( keysTuple ) )
-            collections[ i ] = keyValues[ i ].get( keysTuple );
-          else
-            collections[ i ] = Collections.EMPTY_LIST;
-          }
+        collections[ i ] = keyValues[ i ].remove( keysTuple );
 
-        closure.reset( collections );
-
-        keyEntry.setTuple( closure.getGroupTuple( keysTuple ) );
-
-        // create Closure type here
-        tupleEntryIterator.reset( splice.getJoiner().getIterator( closure ) );
-
-        next.receive( this, grouping );
+        if( collections[ i ] == null )
+          collections[ i ] = Collections.EMPTY_LIST;
         }
-      }
-    finally
-      {
-      keys = createKeySet();
-      keyValues = createKeyValuesArray();
 
-      count.set( numIncomingPaths );
+      closure.reset( collections );
 
-      next.complete( this );
+      keyEntry.setTuple( closure.getGroupTuple( keysTuple ) );
+
+      // create Closure type here
+      tupleEntryIterator.reset( splice.getJoiner().getIterator( closure ) );
+
+      next.receive( this, grouping );
       }
+
+    keys = createKeySet();
+    keyValues = createKeyValuesArray();
+
+    count.set( numIncomingPaths );
+
+    next.complete( this );
     }
   }

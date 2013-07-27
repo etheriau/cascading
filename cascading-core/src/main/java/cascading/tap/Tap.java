@@ -73,6 +73,8 @@ public abstract class Tap<Config, Input, Output> implements FlowElement, Seriali
 
   private ConfigDef processConfigDef;
 
+  /** Field id */
+  private String id = null;
   /** Field trace */
   private final String trace = Util.captureDebugTrace( getClass() );
 
@@ -86,8 +88,6 @@ public abstract class Tap<Config, Input, Output> implements FlowElement, Seriali
     {
     return taps;
     }
-
-  private String id = null;
 
   /**
    * Creates and returns a unique ID for the given Tap, this value is cached and may be used to uniquely identify
@@ -151,8 +151,8 @@ public abstract class Tap<Config, Input, Output> implements FlowElement, Seriali
    * This method is guaranteed to be called before the Flow is started and the
    * {@link cascading.flow.FlowListener#onStarting(cascading.flow.Flow)} event is fired.
    * <p/>
-   * This method will be called once per Flow, and before {@link #sourceConfInit(FlowProcess, Config)} and
-   * {@link #sinkConfInit(FlowProcess, Config)} methods.
+   * This method will be called once per Flow, and before {@link #sourceConfInit(cascading.flow.FlowProcess, Object)} and
+   * {@link #sinkConfInit(cascading.flow.FlowProcess, Object)} methods.
    *
    * @param flow of type Flow
    */

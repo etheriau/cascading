@@ -28,8 +28,10 @@ import java.util.regex.Pattern;
 import cascading.PlatformTestCase;
 import cascading.cascade.Cascades;
 import cascading.flow.Flow;
+import cascading.operation.AssertionLevel;
 import cascading.operation.Function;
 import cascading.operation.Identity;
+import cascading.operation.assertion.AssertExpression;
 import cascading.operation.expression.ExpressionFunction;
 import cascading.operation.regex.RegexSplitter;
 import cascading.pipe.CoGroup;
@@ -68,6 +70,34 @@ public class AssemblyHelpersPlatformTest extends PlatformTestCase
     pipe = new Each( pipe, new Fields( "line" ), splitter );
 
     pipe = new Coerce( pipe, new Fields( "num" ), Integer.class );
+
+    Flow flow = getPlatform().getFlowConnector().connect( source, sink, pipe );
+
+    flow.complete();
+
+    validateLength( flow, 5, 1, Pattern.compile( "^\\d+\\s\\w+$" ) );
+    }
+
+  @Test
+  public void testCoerceFields() throws IOException
+    {
+    getPlatform().copyFromLocal( inputFileLower );
+
+    Tap source = getPlatform().getTextFile( inputFileLower );
+    Tap sink = getPlatform().getTextFile( new Fields( "line" ), new Fields( "num", "char" ), getOutputPath( "coercefields" ), SinkMode.REPLACE );
+
+    Pipe pipe = new Pipe( "coerce" );
+
+    Function splitter = new RegexSplitter( new Fields( "num", "char" ).applyTypes( String.class, String.class ), " " );
+    pipe = new Each( pipe, new Fields( "line" ), splitter );
+
+    pipe = new Coerce( pipe, new Fields( "num" ).applyTypes( Integer.class ) );
+
+    pipe = new Each( pipe, new Fields( "num" ), AssertionLevel.STRICT, new AssertExpression( "num instanceof Integer", Object.class ) );
+
+    pipe = new Coerce( pipe, new Fields( "num" ).applyTypes( String.class ) );
+
+    pipe = new Each( pipe, new Fields( "num" ), AssertionLevel.STRICT, new AssertExpression( "num instanceof String", Object.class ) );
 
     Flow flow = getPlatform().getFlowConnector().connect( source, sink, pipe );
 
@@ -273,6 +303,78 @@ public class AssemblyHelpersPlatformTest extends PlatformTestCase
     }
 
   @Test
+  public void testCountAll() throws IOException
+    {
+    getPlatform().copyFromLocal( inputFileLhs );
+
+    Tap source = getPlatform().getDelimitedFile( new Fields( "num", "char" ), " ", inputFileLhs );
+    Tap sink = getPlatform().getDelimitedFile( new Fields( "count" ), "\t",
+      new Class[]{Integer.TYPE}, getOutputPath( "countall" ), SinkMode.REPLACE );
+
+    Pipe pipe = new Pipe( "count" );
+
+    CountBy countBy = new CountBy( new Fields( "char" ), new Fields( "count" ) );
+
+    pipe = new AggregateBy( pipe, Fields.NONE, 2, countBy );
+
+    Flow flow = getPlatform().getFlowConnector().connect( source, sink, pipe );
+
+    flow.complete();
+
+    validateLength( flow, 1, 1, Pattern.compile( "^\\d+$" ) );
+
+    Tuple[] results = new Tuple[]{
+      new Tuple( 13 )
+    };
+
+    TupleEntryIterator iterator = flow.openSink();
+    int count = 0;
+
+    while( iterator.hasNext() )
+      assertEquals( results[ count++ ], iterator.next().getTuple() );
+
+    iterator.close();
+    }
+
+  @Test
+  public void testCountNullNotNull() throws IOException
+    {
+    getPlatform().copyFromLocal( inputFileLhs );
+
+    Tap source = getPlatform().getDelimitedFile( new Fields( "num", "char" ), " ", inputFileLhs );
+    Tap sink = getPlatform().getDelimitedFile( new Fields( "notnull", "null" ), "\t",
+      new Class[]{Integer.TYPE, Integer.TYPE}, getOutputPath( "countnullnotnull" ), SinkMode.REPLACE );
+
+    Pipe pipe = new Pipe( "count" );
+
+    ExpressionFunction function = new ExpressionFunction( Fields.ARGS, "\"c\".equals($0) ? null : $0", String.class );
+    pipe = new Each( pipe, new Fields( "char" ), function, Fields.REPLACE );
+
+    CountBy countNotNull = new CountBy( new Fields( "char" ), new Fields( "notnull" ), CountBy.Include.NO_NULLS );
+    CountBy countNull = new CountBy( new Fields( "char" ), new Fields( "null" ), CountBy.Include.ONLY_NULLS );
+
+    pipe = new AggregateBy( pipe, Fields.NONE, 2, countNotNull, countNull );
+
+    Flow flow = getPlatform().getFlowConnector().connect( source, sink, pipe );
+
+    flow.complete();
+
+    validateLength( flow, 1, 2, Pattern.compile( "^\\d+\t\\d+$" ) );
+
+    Tuple[] results = new Tuple[]{
+      new Tuple( 9, 4 )
+    };
+
+    TupleEntryIterator iterator = flow.openSink();
+    int count = 0;
+
+    while( iterator.hasNext() )
+      assertEquals( results[ count++ ], iterator.next().getTuple() );
+
+    iterator.close();
+    }
+
+  @Test
   public void testCountMerge() throws IOException
     {
     getPlatform().copyFromLocal( inputFileLhs );
@@ -316,7 +418,7 @@ public class AssemblyHelpersPlatformTest extends PlatformTestCase
     }
 
   @Test
-  public void testSum() throws IOException
+  public void testSumBy() throws IOException
     {
     getPlatform().copyFromLocal( inputFileLhs );
 
@@ -340,6 +442,46 @@ public class AssemblyHelpersPlatformTest extends PlatformTestCase
       new Tuple( "c", 10 ),
       new Tuple( "d", 6 ),
       new Tuple( "e", 5 ),
+    };
+
+    TupleEntryIterator iterator = flow.openSink();
+    int count = 0;
+
+    while( iterator.hasNext() )
+      assertEquals( results[ count++ ], iterator.next().getTuple() );
+
+    iterator.close();
+    }
+
+  @Test
+  public void testSumByNulls() throws IOException
+    {
+    getPlatform().copyFromLocal( inputFileLhs );
+
+    Tap source = getPlatform().getDelimitedFile( new Fields( "num", "char" ), " ", inputFileLhs );
+    Tap sink = getPlatform().getDelimitedFile( new Fields( "char", "sum" ), "\t",
+      new Class[]{String.class, Integer.class}, getOutputPath( "sumnulls" ), SinkMode.REPLACE );
+
+    Pipe pipe = new Pipe( "sum" );
+
+    ExpressionFunction function = new ExpressionFunction( Fields.ARGS, "5 == $0 ? null : $0", Integer.class );
+    pipe = new Each( pipe, new Fields( "num" ), function, Fields.REPLACE );
+
+    // Long.class denotes return null for null, not zero
+    pipe = new SumBy( pipe, new Fields( "char" ), new Fields( "num" ), new Fields( "sum" ), Integer.class, 2 );
+
+    Flow flow = getPlatform().getFlowConnector().connect( source, sink, pipe );
+
+    flow.complete();
+
+    validateLength( flow, 5, 2, Pattern.compile( "^\\w+\\s(\\d+|null)$" ) );
+
+    Tuple[] results = new Tuple[]{
+      new Tuple( "a", 1 ),
+      new Tuple( "b", 7 ),
+      new Tuple( "c", 10 ),
+      new Tuple( "d", 6 ),
+      new Tuple( "e", null ),
     };
 
     TupleEntryIterator iterator = flow.openSink();
@@ -395,7 +537,7 @@ public class AssemblyHelpersPlatformTest extends PlatformTestCase
     }
 
   @Test
-  public void testAverage() throws IOException
+  public void testAverageBy() throws IOException
     {
     getPlatform().copyFromLocal( inputFileLhs );
 
@@ -417,6 +559,45 @@ public class AssemblyHelpersPlatformTest extends PlatformTestCase
       new Tuple( "a", (double) 6 / 2 ),
       new Tuple( "b", (double) 12 / 4 ),
       new Tuple( "c", (double) 10 / 4 ),
+      new Tuple( "d", (double) 6 / 2 ),
+      new Tuple( "e", (double) 5 / 1 ),
+    };
+
+    TupleEntryIterator iterator = flow.openSink();
+    int count = 0;
+
+    while( iterator.hasNext() )
+      assertEquals( results[ count++ ], iterator.next().getTuple() );
+
+    iterator.close();
+    }
+
+  @Test
+  public void testAverageByNull() throws IOException
+    {
+    getPlatform().copyFromLocal( inputFileLhs );
+
+    Tap source = getPlatform().getDelimitedFile( new Fields( "num", "char" ), " ", inputFileLhs );
+    Tap sink = getPlatform().getDelimitedFile( new Fields( "char", "average" ), "\t",
+      new Class[]{String.class, Double.TYPE}, getOutputPath( "averagenull" ), SinkMode.REPLACE );
+
+    Pipe pipe = new Pipe( "average" );
+
+    ExpressionFunction function = new ExpressionFunction( Fields.ARGS, "3 == $0 ? null : $0", Integer.class );
+    pipe = new Each( pipe, new Fields( "num" ), function, Fields.REPLACE );
+
+    pipe = new AverageBy( pipe, new Fields( "char" ), new Fields( "num" ), new Fields( "average" ), AverageBy.Include.NO_NULLS, 2 );
+
+    Flow flow = getPlatform().getFlowConnector().connect( source, sink, pipe );
+
+    flow.complete();
+
+    validateLength( flow, 5, 2, Pattern.compile( "^\\w+\\s[\\d.]+$" ) );
+
+    Tuple[] results = new Tuple[]{
+      new Tuple( "a", (double) 6 / 2 ),
+      new Tuple( "b", (double) 12 / 4 ),
+      new Tuple( "c", (double) 7 / 3 ),
       new Tuple( "d", (double) 6 / 2 ),
       new Tuple( "e", (double) 5 / 1 ),
     };
@@ -783,6 +964,78 @@ public class AssemblyHelpersPlatformTest extends PlatformTestCase
       new Tuple( "c", 1 ),
       new Tuple( "d", 1 ),
       new Tuple( "e", 1 ),
+    };
+
+    TupleEntryIterator iterator = flow.openSink();
+    int count = 0;
+
+    while( iterator.hasNext() )
+      assertEquals( results[ count++ ], iterator.next().getTuple() );
+
+    iterator.close();
+    }
+
+  @Test
+  public void testMinBy() throws IOException
+    {
+    getPlatform().copyFromLocal( inputFileLhs );
+
+    Tap source = getPlatform().getDelimitedFile( new Fields( "num", "char" ), " ", inputFileLhs );
+    Tap sink = getPlatform().getDelimitedFile( new Fields( "char", "min" ), "\t",
+      new Class[]{String.class, Integer.TYPE}, getOutputPath( "min" ), SinkMode.REPLACE );
+
+    Pipe pipe = new Pipe( "min" );
+
+    pipe = new MinBy( pipe, new Fields( "char" ), new Fields( "num" ), new Fields( "min" ), long.class, 2 );
+
+    Flow flow = getPlatform().getFlowConnector().connect( source, sink, pipe );
+
+    flow.complete();
+
+    validateLength( flow, 5, 2, Pattern.compile( "^\\w+\\s\\d+$" ) );
+
+    Tuple[] results = new Tuple[]{
+      new Tuple( "a", 1 ),
+      new Tuple( "b", 1 ),
+      new Tuple( "c", 1 ),
+      new Tuple( "d", 2 ),
+      new Tuple( "e", 5 ),
+    };
+
+    TupleEntryIterator iterator = flow.openSink();
+    int count = 0;
+
+    while( iterator.hasNext() )
+      assertEquals( results[ count++ ], iterator.next().getTuple() );
+
+    iterator.close();
+    }
+
+  @Test
+  public void testMaxBy() throws IOException
+    {
+    getPlatform().copyFromLocal( inputFileLhs );
+
+    Tap source = getPlatform().getDelimitedFile( new Fields( "num", "char" ), " ", inputFileLhs );
+    Tap sink = getPlatform().getDelimitedFile( new Fields( "char", "max" ), "\t",
+      new Class[]{String.class, Integer.TYPE}, getOutputPath( "max" ), SinkMode.REPLACE );
+
+    Pipe pipe = new Pipe( "max" );
+
+    pipe = new MaxBy( pipe, new Fields( "char" ), new Fields( "num" ), new Fields( "max" ), long.class, 2 );
+
+    Flow flow = getPlatform().getFlowConnector().connect( source, sink, pipe );
+
+    flow.complete();
+
+    validateLength( flow, 5, 2, Pattern.compile( "^\\w+\\s\\d+$" ) );
+
+    Tuple[] results = new Tuple[]{
+      new Tuple( "a", 5 ),
+      new Tuple( "b", 5 ),
+      new Tuple( "c", 4 ),
+      new Tuple( "d", 4 ),
+      new Tuple( "e", 5 ),
     };
 
     TupleEntryIterator iterator = flow.openSink();
