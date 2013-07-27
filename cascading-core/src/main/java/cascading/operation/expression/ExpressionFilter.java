@@ -47,7 +47,7 @@ import org.codehaus.janino.ExpressionEvaluator;
  * Field names used in the expression should be valid Java variable names; for example, '+' or '-' are not allowed.
  * Also the use of a field name that begins with an upper-case character is likely to fail and should be avoided.
  */
-public class ExpressionFilter extends ExpressionOperation implements Filter<ExpressionOperation.Context>
+public class ExpressionFilter extends ExpressionOperation implements Filter<ScriptOperation.Context>
   {
   /**
    * Constructor ExpressionFilter creates a new ExpressionFilter instance.

@@ -21,6 +21,7 @@
 package cascading.flow.local.stream;
 
 import java.util.Collections;
+import java.util.Iterator;
 import java.util.List;
 
 import cascading.flow.FlowProcess;
@@ -88,30 +89,34 @@ public class LocalGroupByGate extends MemorySpliceGate
 
     next.start( this );
 
-    try
+    // drain the keys and keyValues collections to preserve memory
+    Iterator<Tuple> iterator = keys.iterator();
+
+    // no need to synchronize here as we are guaranteed all writer threads are completed
+    while( iterator.hasNext() )
       {
-      // no need to synchronize here as we are guaranteed all writer threads are completed
-      for( Tuple groupTuple : keys )
-        {
-        keyEntry.setTuple( groupTuple );
+      Tuple groupTuple = iterator.next();
 
-        List<Tuple> tuples = valueMap.get( groupTuple );
+      iterator.remove();
 
-        if( valueComparators != null )
-          Collections.sort( tuples, valueComparators[ 0 ] );
+      keyEntry.setTuple( groupTuple );
 
-        tupleEntryIterator.reset( tuples.iterator() );
+      List<Tuple> tuples = valueMap.get( groupTuple ); // can't removeAll, returns unmodifiable collection
 
-        next.receive( this, grouping );
-        }
+      if( valueComparators != null )
+        Collections.sort( tuples, valueComparators[ 0 ] );
+
+      tupleEntryIterator.reset( tuples.iterator() );
+
+      next.receive( this, grouping );
+
+      tuples.clear();
       }
-    finally
-      {
-      keys = createKeySet();
-      valueMap = initNewValueMap();
-      count.set( numIncomingPaths );
 
-      next.complete( this );
-      }
+    keys = createKeySet();
+    valueMap = initNewValueMap();
+    count.set( numIncomingPaths );
+
+    next.complete( this );
     }
   }

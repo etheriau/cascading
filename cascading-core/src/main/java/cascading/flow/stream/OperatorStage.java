@@ -249,7 +249,7 @@ public abstract class OperatorStage<Incoming> extends ElementStage<Incoming, Tup
     {
     Scope outgoingScope = outgoingScopes.get( 0 );
 
-    operationCall = new ConcreteCall( outgoingScope.getArgumentsDeclarator() );
+    operationCall = new ConcreteCall( outgoingScope.getArgumentsDeclarator(), outgoingScope.getOperationDeclaredFields() );
 
     argumentsSelector = outgoingScope.getArgumentsSelector();
     remainderFields = outgoingScope.getRemainderPassThroughFields();
@@ -289,6 +289,8 @@ public abstract class OperatorStage<Incoming> extends ElementStage<Incoming, Tup
   @Override
   public void cleanup()
     {
+    operationCall.setOutputCollector( null );
+
     try
       {
       ( (Operator) getFlowElement() ).getOperation().cleanup( flowProcess, operationCall );

@@ -23,6 +23,7 @@ package cascading.tuple;
 import java.beans.ConstructorProperties;
 import java.io.Serializable;
 import java.io.StringReader;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -33,6 +34,8 @@ import java.util.Scanner;
 
 import cascading.operation.Aggregator;
 import cascading.pipe.Pipe;
+import cascading.tuple.coerce.Coercions;
+import cascading.tuple.type.CoercibleType;
 import cascading.util.Util;
 
 /**
@@ -53,7 +56,6 @@ import cascading.util.Util;
  * must be registered with Hadoop. For further performance improvements, see the
  * {@link cascading.tuple.hadoop.SerializationToken} Java annotation.
  *
- * @see Comparable
  * @see org.apache.hadoop.io.serializer.Serialization
  * @see cascading.tuple.hadoop.SerializationToken
  */
@@ -211,7 +213,9 @@ public class Tuple implements Comparable<Object>, Iterable<Object>, Serializable
     }
 
   /**
-   * Method get returns the element at the given position i.
+   * Method get returns the element at the given position.
+   * <p/>
+   * This method will perform no coercion on the element.
    *
    * @param pos of type int
    * @return Object
@@ -222,69 +226,69 @@ public class Tuple implements Comparable<Object>, Iterable<Object>, Serializable
     }
 
   /**
-   * Method getString returns the element at the given position i as a String.
+   * Method getString returns the element at the given position as a String.
    *
    * @param pos of type int
    * @return String
    */
   public String getString( int pos )
     {
-    return Tuples.toString( getObject( pos ) );
+    return Coercions.STRING.coerce( getObject( pos ) );
     }
 
   /**
-   * Method getFloat returns the element at the given position i as a float. Zero if null.
+   * Method getFloat returns the element at the given position as a float. Zero if null.
    *
    * @param pos of type int
    * @return float
    */
   public float getFloat( int pos )
     {
-    return Tuples.toFloat( getObject( pos ) );
+    return Coercions.FLOAT.coerce( getObject( pos ) );
     }
 
   /**
-   * Method getDouble returns the element at the given position i as a double. Zero if null.
+   * Method getDouble returns the element at the given position as a double. Zero if null.
    *
    * @param pos of type int
    * @return double
    */
   public double getDouble( int pos )
     {
-    return Tuples.toDouble( getObject( pos ) );
+    return Coercions.DOUBLE.coerce( getObject( pos ) );
     }
 
   /**
-   * Method getInteger returns the element at the given position i as an int. Zero if null.
+   * Method getInteger returns the element at the given position as an int. Zero if null.
    *
    * @param pos of type int
    * @return int
    */
   public int getInteger( int pos )
     {
-    return Tuples.toInteger( getObject( pos ) );
+    return Coercions.INTEGER.coerce( getObject( pos ) );
     }
 
   /**
-   * Method getLong returns the element at the given position i as an long. Zero if null.
+   * Method getLong returns the element at the given position as an long. Zero if null.
    *
    * @param pos of type int
    * @return long
    */
   public long getLong( int pos )
     {
-    return Tuples.toLong( getObject( pos ) );
+    return Coercions.LONG.coerce( getObject( pos ) );
     }
 
   /**
-   * Method getShort returns the element at the given position i as an short. Zero if null.
+   * Method getShort returns the element at the given position as an short. Zero if null.
    *
    * @param pos of type int
    * @return long
    */
   public short getShort( int pos )
     {
-    return Tuples.toShort( getObject( pos ) );
+    return Coercions.SHORT.coerce( getObject( pos ) );
     }
 
   /**
@@ -296,7 +300,7 @@ public class Tuple implements Comparable<Object>, Iterable<Object>, Serializable
    */
   public boolean getBoolean( int pos )
     {
-    return Tuples.toBoolean( getObject( pos ) );
+    return Coercions.BOOLEAN.coerce( getObject( pos ) );
     }
 
   /**
@@ -781,6 +785,25 @@ public class Tuple implements Comparable<Object>, Iterable<Object>, Serializable
       elements.set( i, tuple.elements.get( count++ ) );
     }
 
+  private void set( int[] pos, Type[] types, Tuple tuple, CoercibleType[] coercions )
+    {
+    verifyModifiable();
+
+    if( pos.length != tuple.size() )
+      throw new TupleException( "given tuple not same size as position array: " + pos.length + ", tuple: " + tuple.print() );
+
+    int count = 0;
+
+    for( int i : pos )
+      {
+      Object element = tuple.elements.get( count );
+      Type type = types[ count++ ];
+      element = coercions[ i ].coerce( element, type );
+
+      elements.set( i, element );
+      }
+    }
+
   /**
    * Method set sets the values in the given selector positions to the values from the given Tuple.
    *
@@ -793,6 +816,18 @@ public class Tuple implements Comparable<Object>, Iterable<Object>, Serializable
     try
       {
       set( declarator.getPos( selector ), tuple );
+      }
+    catch( Exception exception )
+      {
+      throw new TupleException( "unable to set into: " + declarator.print() + ", using selector: " + selector.print(), exception );
+      }
+    }
+
+  protected void set( Fields declarator, Fields selector, Tuple tuple, CoercibleType[] coercions )
+    {
+    try
+      {
+      set( declarator.getPos( selector ), declarator.getTypes(), tuple, coercions );
       }
     catch( Exception exception )
       {
@@ -909,9 +944,9 @@ public class Tuple implements Comparable<Object>, Iterable<Object>, Serializable
       if( lhs == null && rhs == null )
         continue;
 
-      if( lhs == null && rhs != null )
+      if( lhs == null )
         return -1;
-      else if( lhs != null && rhs == null )
+      else if( rhs == null )
         return 1;
 
       int c = lhs.compareTo( rhs ); // guaranteed to not be null
@@ -941,18 +976,18 @@ public class Tuple implements Comparable<Object>, Iterable<Object>, Serializable
       Object lhs = this.elements.get( i );
       Object rhs = other.elements.get( i );
 
-      int c = 0;
+      int c;
 
       if( comparators[ i ] != null )
         c = comparators[ i ].compare( lhs, rhs );
       else if( lhs == null && rhs == null )
         c = 0;
-      else if( lhs == null && rhs != null )
+      else if( lhs == null )
         return -1;
-      else if( lhs != null && rhs == null )
+      else if( rhs == null )
         return 1;
       else
-        c = ( (Comparable) lhs ).compareTo( (Comparable) rhs ); // guaranteed to not be null
+        c = ( (Comparable) lhs ).compareTo( rhs ); // guaranteed to not be null
 
       if( c != 0 )
         return c;

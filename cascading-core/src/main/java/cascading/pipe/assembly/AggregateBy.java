@@ -43,6 +43,7 @@ import cascading.tuple.Fields;
 import cascading.tuple.Tuple;
 import cascading.tuple.TupleEntry;
 import cascading.tuple.TupleEntryCollector;
+import cascading.tuple.util.TupleViews;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -104,6 +105,7 @@ public class AggregateBy extends SubAssembly
 
   private String name;
   private int threshold;
+  private Fields groupingFields;
   private Fields[] argumentFields;
   private Functor[] functors;
   private Aggregator[] aggregators;
@@ -161,7 +163,7 @@ public class AggregateBy extends SubAssembly
    *
    * @see Functor
    */
-  public static class CompositeFunction extends BaseOperation<LinkedHashMap<Tuple, Tuple[]>> implements Function<LinkedHashMap<Tuple, Tuple[]>>
+  public static class CompositeFunction extends BaseOperation<CompositeFunction.Context> implements Function<CompositeFunction.Context>
     {
     public static final int DEFAULT_THRESHOLD = 10000;
 
@@ -170,6 +172,13 @@ public class AggregateBy extends SubAssembly
     private final Fields[] argumentFields;
     private final Fields[] functorFields;
     private final Functor[] functors;
+
+    public static class Context
+      {
+      LinkedHashMap<Tuple, Tuple[]> lru;
+      TupleEntry[] arguments;
+      Tuple result;
+      }
 
     /**
      * Constructor CompositeFunction creates a new CompositeFunction instance.
@@ -210,14 +219,14 @@ public class AggregateBy extends SubAssembly
       {
       Fields fields = groupingFields;
 
-      for( int i = 0; i < functors.length; i++ )
-        fields = fields.append( functors[ i ].getDeclaredFields() );
+      for( Functor functor : functors )
+        fields = fields.append( functor.getDeclaredFields() );
 
       return fields;
       }
 
     @Override
-    public void prepare( final FlowProcess flowProcess, final OperationCall<LinkedHashMap<Tuple, Tuple[]>> operationCall )
+    public void prepare( final FlowProcess flowProcess, final OperationCall<CompositeFunction.Context> operationCall )
       {
       if( threshold == 0 )
         {
@@ -231,7 +240,43 @@ public class AggregateBy extends SubAssembly
 
       LOG.info( "using threshold value: {}", threshold );
 
-      operationCall.setContext( new LinkedHashMap<Tuple, Tuple[]>( threshold, 0.75f, true )
+      Fields[] fields = new Fields[ functors.length + 1 ];
+
+      fields[ 0 ] = groupingFields;
+
+      for( int i = 0; i < functors.length; i++ )
+        fields[ i + 1 ] = functors[ i ].getDeclaredFields();
+
+      final Context context = new Context();
+
+      context.arguments = new TupleEntry[ functors.length ];
+
+      for( int i = 0; i < context.arguments.length; i++ )
+        {
+        Fields resolvedArgumentFields = operationCall.getArgumentFields();
+
+        int[] pos;
+
+        if( argumentFields[ i ].isAll() )
+          pos = resolvedArgumentFields.getPos();
+        else
+          pos = resolvedArgumentFields.getPos( argumentFields[ i ] ); // returns null if selector is ALL
+
+        Tuple narrow = TupleViews.createNarrow( pos );
+
+        Fields currentFields;
+
+        if( this.argumentFields[ i ].isSubstitution() )
+          currentFields = resolvedArgumentFields.select( this.argumentFields[ i ] ); // attempt to retain comparator
+        else
+          currentFields = Fields.asDeclaration( this.argumentFields[ i ] );
+
+        context.arguments[ i ] = new TupleEntry( currentFields, narrow );
+        }
+
+      context.result = TupleViews.createComposite( fields );
+
+      context.lru = new LinkedHashMap<Tuple, Tuple[]>( threshold, 0.75f, true )
       {
       long flushes = 0;
 
@@ -242,7 +287,7 @@ public class AggregateBy extends SubAssembly
 
         if( doRemove )
           {
-          completeFunctors( flowProcess, ( (FunctionCall) operationCall ).getOutputCollector(), eldest );
+          completeFunctors( flowProcess, ( (FunctionCall) operationCall ).getOutputCollector(), context.result, eldest );
           flowProcess.increment( Flush.Num_Keys_Flushed, 1 );
 
           if( flushes % threshold == 0 ) // every multiple, write out data
@@ -261,45 +306,60 @@ public class AggregateBy extends SubAssembly
 
         return doRemove;
         }
-      } );
+      };
+
+      operationCall.setContext( context );
       }
 
     @Override
-    public void operate( FlowProcess flowProcess, FunctionCall<LinkedHashMap<Tuple, Tuple[]>> functionCall )
+    public void operate( FlowProcess flowProcess, FunctionCall<CompositeFunction.Context> functionCall )
       {
-      TupleEntry args = functionCall.getArguments();
-      Tuple key = args.selectTuple( groupingFields );
-      Tuple[] context = functionCall.getContext().get( key );
+      TupleEntry arguments = functionCall.getArguments();
+      Tuple key = arguments.selectTupleCopy( groupingFields );
 
-      if( context == null )
+      Context context = functionCall.getContext();
+      Tuple[] functorContext = context.lru.get( key );
+
+      if( functorContext == null )
         {
-        context = new Tuple[ functors.length ];
-        functionCall.getContext().put( key, context );
+        functorContext = new Tuple[ functors.length ];
+        context.lru.put( key, functorContext );
         }
 
       for( int i = 0; i < functors.length; i++ )
-        context[ i ] = functors[ i ].aggregate( flowProcess, args.selectEntry( argumentFields[ i ] ), context[ i ] );
+        {
+        TupleViews.reset( context.arguments[ i ].getTuple(), arguments.getTuple() );
+        functorContext[ i ] = functors[ i ].aggregate( flowProcess, context.arguments[ i ], functorContext[ i ] );
+        }
       }
 
     @Override
-    public void flush( FlowProcess flowProcess, OperationCall<LinkedHashMap<Tuple, Tuple[]>> operationCall )
+    public void flush( FlowProcess flowProcess, OperationCall<CompositeFunction.Context> operationCall )
       {
       // need to drain context
       TupleEntryCollector collector = ( (FunctionCall) operationCall ).getOutputCollector();
 
-      for( Map.Entry<Tuple, Tuple[]> entry : operationCall.getContext().entrySet() )
-        completeFunctors( flowProcess, collector, entry );
+      Tuple result = operationCall.getContext().result;
+      LinkedHashMap<Tuple, Tuple[]> context = operationCall.getContext().lru;
+
+      for( Map.Entry<Tuple, Tuple[]> entry : context.entrySet() )
+        completeFunctors( flowProcess, collector, result, entry );
 
       operationCall.setContext( null );
       }
 
-    private void completeFunctors( FlowProcess flowProcess, TupleEntryCollector outputCollector, Map.Entry<Tuple, Tuple[]> entry )
+    private void completeFunctors( FlowProcess flowProcess, TupleEntryCollector outputCollector, Tuple result, Map.Entry<Tuple, Tuple[]> entry )
       {
-      Tuple result = new Tuple( entry.getKey() );
+      Tuple[] results = new Tuple[ functors.length + 1 ];
+
+      results[ 0 ] = entry.getKey();
+
       Tuple[] values = entry.getValue();
 
       for( int i = 0; i < functors.length; i++ )
-        result.addAll( functors[ i ].complete( flowProcess, values[ i ] ) );
+        results[ i + 1 ] = functors[ i ].complete( flowProcess, values[ i ] );
+
+      TupleViews.reset( result, results );
 
       outputCollector.add( result );
       }
@@ -464,6 +524,9 @@ public class AggregateBy extends SubAssembly
 
   protected void initialize( Fields groupingFields, Pipe[] pipes, Fields[] argumentFields, Functor[] functors, Aggregator[] aggregators )
     {
+    setPrevious( pipes );
+
+    this.groupingFields = groupingFields;
     this.argumentFields = argumentFields;
     this.functors = functors;
     this.aggregators = aggregators;
@@ -472,6 +535,9 @@ public class AggregateBy extends SubAssembly
 
     Fields sortFields = Fields.copyComparators( Fields.merge( argumentFields ), argumentFields );
     Fields argumentSelector = Fields.merge( groupingFields, sortFields );
+
+    if( argumentSelector.equals( Fields.NONE ) )
+      argumentSelector = Fields.ALL;
 
     Pipe[] functions = new Pipe[ pipes.length ];
 
@@ -494,6 +560,34 @@ public class AggregateBy extends SubAssembly
   protected void verify()
     {
 
+    }
+
+  /**
+   * Method getGroupingFields returns the Fields this instances will be grouping against.
+   *
+   * @return the current grouping fields
+   */
+  public Fields getGroupingFields()
+    {
+    return groupingFields;
+    }
+
+  /**
+   * Method getFieldDeclarations returns an array of Fields where each Field element in the array corresponds to the
+   * field declaration of the given Aggregator operations.
+   * <p/>
+   * Note the actual Fields values are returned, not planner resolved Fields.
+   *
+   * @return and array of Fields
+   */
+  public Fields[] getFieldDeclarations()
+    {
+    Fields[] fields = new Fields[ this.aggregators.length ];
+
+    for( int i = 0; i < aggregators.length; i++ )
+      fields[ i ] = aggregators[ i ].getFieldDeclaration();
+
+    return fields;
     }
 
   protected Fields[] getArgumentFields()

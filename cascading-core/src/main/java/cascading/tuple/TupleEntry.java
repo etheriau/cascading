@@ -21,6 +21,13 @@
 package cascading.tuple;
 
 import java.beans.ConstructorProperties;
+import java.lang.reflect.Type;
+import java.util.Arrays;
+import java.util.Iterator;
+
+import cascading.tuple.coerce.Coercions;
+import cascading.tuple.type.CoercibleType;
+import cascading.util.ForeverValueIterator;
 
 /**
  * Class TupleEntry allows a {@link Tuple} instance and its declaring {@link Fields} instance to be used as a single object.
@@ -28,16 +35,34 @@ import java.beans.ConstructorProperties;
  * Once a TupleEntry is created, its Fields cannot be changed, but the Tuple instance it holds can be replaced or
  * modified. The managed Tuple should not have elements added or removed, as this will break the relationship with
  * the associated Fields instance.
+ * <p/>
+ * If type information is provided on the Fields instance, all setters on this class will use that information to
+ * coerce the given object to the expected type.
+ * <p/>
+ * For example, if position is is of type {@code long}, then {@code entry.setString(0, "9" )} will coerce the "9" to a
+ * long {@code 9}. Thus, {@code entry.getObject(0) == 9l}.
+ * <p/>
+ * No coercion is performed with the {@link #getObject(Comparable)} and {@link #getObject(int)} methods.
+ * <p/>
+ * To set a value without coercion, see the {@link #setRaw(Comparable, Object)} and {@link #setRaw(int, Object)}
+ * methods.
  *
  * @see Fields
  * @see Tuple
  */
 public class TupleEntry
   {
+  private static final CoercibleType[] EMPTY_COERCIONS = new CoercibleType[ 0 ];
+  private static final ForeverValueIterator<CoercibleType> OBJECT_ITERATOR = new ForeverValueIterator<CoercibleType>( Coercions.OBJECT );
+
+  /** An EMPTY TupleEntry instance for use as a stand in instead of a {@code null}. */
   public static final TupleEntry NULL = new TupleEntry( Fields.NONE, Tuple.NULL );
 
   /** Field fields */
-  Fields fields;
+  private Fields fields;
+
+  private CoercibleType[] coercions = EMPTY_COERCIONS;
+
   /** Field isUnmodifiable */
   private boolean isUnmodifiable = false;
   /** Field tuple */
@@ -85,7 +110,7 @@ public class TupleEntry
         {
         Comparable field = selector.get( i );
 
-        int pos = 0;
+        int pos;
 
         if( field instanceof String )
           {
@@ -114,7 +139,9 @@ public class TupleEntry
   /** Constructor TupleEntry creates a new TupleEntry instance. */
   public TupleEntry()
     {
-    this.fields = new Fields();
+    this.fields = Fields.NONE;
+
+    setCoercions();
     }
 
   /**
@@ -125,8 +152,10 @@ public class TupleEntry
   @ConstructorProperties({"isUnmodifiable"})
   public TupleEntry( boolean isUnmodifiable )
     {
-    this.fields = new Fields();
+    this.fields = Fields.NONE;
     this.isUnmodifiable = isUnmodifiable;
+
+    setCoercions();
     }
 
   /**
@@ -138,6 +167,8 @@ public class TupleEntry
   public TupleEntry( Fields fields )
     {
     this.fields = fields;
+
+    setCoercions();
     }
 
   /**
@@ -151,6 +182,25 @@ public class TupleEntry
     {
     this.fields = fields;
     this.isUnmodifiable = isUnmodifiable;
+
+    setCoercions();
+    }
+
+  /**
+   * Constructor TupleEntry creates a new TupleEntry instance.
+   *
+   * @param fields         of type Fields
+   * @param tuple          of type Tuple
+   * @param isUnmodifiable of type boolean
+   */
+  @ConstructorProperties({"fields", "tuple", "isUnmodifiable"})
+  public TupleEntry( Fields fields, Tuple tuple, boolean isUnmodifiable )
+    {
+    this.fields = fields;
+    this.isUnmodifiable = isUnmodifiable;
+    setTuple( tuple );
+
+    setCoercions();
     }
 
   /**
@@ -164,6 +214,8 @@ public class TupleEntry
     {
     this.fields = fields;
     this.tuple = tuple;
+
+    setCoercions();
     }
 
   /**
@@ -174,8 +226,10 @@ public class TupleEntry
   @ConstructorProperties({"tupleEntry"})
   public TupleEntry( TupleEntry tupleEntry )
     {
-    this.fields = tupleEntry.fields;
-    this.tuple = new Tuple( tupleEntry.getTuple() );
+    this.fields = tupleEntry.getFields();
+    this.tuple = tupleEntry.getTupleCopy();
+
+    setCoercions();
     }
 
   /**
@@ -188,6 +242,20 @@ public class TupleEntry
     {
     this.fields = Fields.size( tuple.size() );
     this.tuple = tuple;
+
+    setCoercions();
+    }
+
+  private void setCoercions()
+    {
+    Fields fields = getFields();
+    Type[] types = fields.types; // safe to not get a copy
+    int size = fields.size();
+
+    size = size == 0 && tuple != null ? tuple.size() : size;
+
+    if( coercions.length < size )
+      coercions = Coercions.coercibleArray( size, types );
     }
 
   /**
@@ -211,6 +279,16 @@ public class TupleEntry
     }
 
   /**
+   * Returns true if there are types associated with this instance.
+   *
+   * @return boolean
+   */
+  public boolean hasTypes()
+    {
+    return fields.hasTypes();
+    }
+
+  /**
    * Method getTuple returns the tuple of this TupleEntry object.
    *
    * @return the tuple (type Tuple) of this TupleEntry object.
@@ -231,6 +309,40 @@ public class TupleEntry
     }
 
   /**
+   * Method getCoercedTuple is a helper method for copying the current tuple elements into a new Tuple,
+   * of the same size, as the requested coerced types.
+   *
+   * @param types of type Type[]
+   * @return returns the a new Tuple instance with coerced values
+   */
+  public Tuple getCoercedTuple( Type[] types )
+    {
+    return getCoercedTuple( types, Tuple.size( types.length ) );
+    }
+
+  /**
+   * Method getCoercedTuple is a helper method for copying the current tuple elements into the new Tuple,
+   * of the same size, as the requested coerced types.
+   *
+   * @param types of type Type[]
+   * @param into  of type Tuple
+   * @return returns the given into Tuple instance with coerced values
+   */
+  public Tuple getCoercedTuple( Type[] types, Tuple into )
+    {
+    if( coercions.length != types.length || types.length != into.size() )
+      throw new IllegalArgumentException( "current entry and given tuple and types must be same length" );
+
+    for( int i = 0; i < coercions.length; i++ )
+      {
+      Object element = tuple.getObject( i );
+      into.set( i, coercions[ i ].coerce( element, types[ i ] ) );
+      }
+
+    return into;
+    }
+
+  /**
    * Method setTuple sets the tuple of this TupleEntry object.
    *
    * @param tuple the tuple of this TupleEntry object.
@@ -241,6 +353,33 @@ public class TupleEntry
       this.tuple = Tuples.asUnmodifiable( tuple );
     else
       this.tuple = tuple;
+
+    setCoercions();
+    }
+
+  /**
+   * Method setCanonicalTuple replaces each value of the current tuple with the given tuple elements after
+   * they are coerced.
+   * <p/>
+   * This method will modify the existing Tuple wrapped by this TupleEntry instance even
+   * if it is marked as unmodifiable.
+   *
+   * @param tuple to replace the current wrapped Tuple instance
+   */
+  public void setCanonicalTuple( Tuple tuple )
+    {
+    if( isUnmodifiable )
+      tuple = Tuples.asUnmodifiable( tuple );
+
+    if( fields.size() != tuple.size() )
+      throw new IllegalArgumentException( "current entry and given tuple must be same length" );
+
+    for( int i = 0; i < coercions.length; i++ )
+      {
+      Object element = tuple.getObject( i );
+
+      this.tuple.set( i, coercions[ i ].canonical( element ) ); // force read type to the expected type
+      }
     }
 
   /**
@@ -269,6 +408,8 @@ public class TupleEntry
 
   /**
    * Method get returns the value in the given position pos.
+   * <p/>
+   * No coercion is performed if there is an associated coercible type.
    *
    * @param pos position of the element to return.
    * @return Object
@@ -300,13 +441,56 @@ public class TupleEntry
    * <br/>
    * {@code fieldName} may optionally be a {@link Fields} instance. Only the first field name or position will
    * be considered.
+   * <p/>
+   * No coercion is performed if there is an associated coercible type.
    *
    * @param fieldName field name or position to return
    * @return Comparable
    */
   public Object getObject( Comparable fieldName )
     {
-    return tuple.getObject( fields.getPos( asFieldName( fieldName ) ) );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+    return tuple.getObject( pos );
+    }
+
+  /**
+   * Method set sets the value in the given field or position.
+   * <p/>
+   * This method is deprecated in favor of {@link #setRaw(Comparable, Object)}
+   *
+   * @param fieldName field name or position to set
+   * @param value     of type Comparable
+   */
+  @Deprecated
+  public void set( Comparable fieldName, Object value )
+    {
+    tuple.set( fields.getPos( asFieldName( fieldName ) ), value );
+    }
+
+  /**
+   * Method set sets the value in the given position.
+   * <p/>
+   * No coercion is performed if there is an associated coercible type.
+   *
+   * @param pos   position to set
+   * @param value of type Comparable
+   */
+  public void setRaw( int pos, Object value )
+    {
+    tuple.set( pos, value );
+    }
+
+  /**
+   * Method set sets the value in the given field or position.
+   * <p/>
+   * No coercion is performed if there is an associated coercible type.
+   *
+   * @param fieldName field name or position to set
+   * @param value     of type Comparable
+   */
+  public void setRaw( Comparable fieldName, Object value )
+    {
+    tuple.set( fields.getPos( asFieldName( fieldName ) ), value );
     }
 
   /**
@@ -315,9 +499,11 @@ public class TupleEntry
    * @param fieldName field name or position to set
    * @param value     of type Comparable
    */
-  public void set( Comparable fieldName, Object value )
+  public void setObject( Comparable fieldName, Object value )
     {
-    tuple.set( fields.getPos( asFieldName( fieldName ) ), value );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+
+    tuple.set( pos, coercions[ pos ].canonical( value ) );
     }
 
   /**
@@ -328,7 +514,9 @@ public class TupleEntry
    */
   public void setBoolean( Comparable fieldName, boolean value )
     {
-    tuple.setBoolean( fields.getPos( asFieldName( fieldName ) ), value );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+
+    tuple.set( pos, coercions[ pos ].canonical( value ) );
     }
 
   /**
@@ -339,7 +527,9 @@ public class TupleEntry
    */
   public void setShort( Comparable fieldName, short value )
     {
-    tuple.setShort( fields.getPos( asFieldName( fieldName ) ), value );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+
+    tuple.set( pos, coercions[ pos ].canonical( value ) );
     }
 
   /**
@@ -350,7 +540,9 @@ public class TupleEntry
    */
   public void setInteger( Comparable fieldName, int value )
     {
-    tuple.setInteger( fields.getPos( asFieldName( fieldName ) ), value );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+
+    tuple.set( pos, coercions[ pos ].canonical( value ) );
     }
 
   /**
@@ -361,7 +553,9 @@ public class TupleEntry
    */
   public void setLong( Comparable fieldName, long value )
     {
-    tuple.setLong( fields.getPos( asFieldName( fieldName ) ), value );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+
+    tuple.set( pos, coercions[ pos ].canonical( value ) );
     }
 
   /**
@@ -372,7 +566,9 @@ public class TupleEntry
    */
   public void setFloat( Comparable fieldName, float value )
     {
-    tuple.setFloat( fields.getPos( asFieldName( fieldName ) ), value );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+
+    tuple.set( pos, coercions[ pos ].canonical( value ) );
     }
 
   /**
@@ -383,7 +579,9 @@ public class TupleEntry
    */
   public void setDouble( Comparable fieldName, double value )
     {
-    tuple.setDouble( fields.getPos( asFieldName( fieldName ) ), value );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+
+    tuple.set( pos, coercions[ pos ].canonical( value ) );
     }
 
   /**
@@ -394,7 +592,9 @@ public class TupleEntry
    */
   public void setString( Comparable fieldName, String value )
     {
-    tuple.setString( fields.getPos( asFieldName( fieldName ) ), value );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+
+    tuple.set( pos, coercions[ pos ].canonical( value ) );
     }
 
   /**
@@ -408,7 +608,8 @@ public class TupleEntry
    */
   public String getString( Comparable fieldName )
     {
-    return tuple.getString( fields.getPos( asFieldName( fieldName ) ) );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+    return (String) coercions[ pos ].coerce( tuple.getObject( pos ), String.class );
     }
 
   /**
@@ -422,7 +623,8 @@ public class TupleEntry
    */
   public float getFloat( Comparable fieldName )
     {
-    return tuple.getFloat( fields.getPos( asFieldName( fieldName ) ) );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+    return (Float) coercions[ pos ].coerce( tuple.getObject( pos ), float.class );
     }
 
   /**
@@ -436,7 +638,8 @@ public class TupleEntry
    */
   public double getDouble( Comparable fieldName )
     {
-    return tuple.getDouble( fields.getPos( asFieldName( fieldName ) ) );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+    return (Double) coercions[ pos ].coerce( tuple.getObject( pos ), double.class );
     }
 
   /**
@@ -450,7 +653,8 @@ public class TupleEntry
    */
   public int getInteger( Comparable fieldName )
     {
-    return tuple.getInteger( fields.getPos( asFieldName( fieldName ) ) );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+    return (Integer) coercions[ pos ].coerce( tuple.getObject( pos ), int.class );
     }
 
   /**
@@ -464,7 +668,8 @@ public class TupleEntry
    */
   public long getLong( Comparable fieldName )
     {
-    return tuple.getLong( fields.getPos( asFieldName( fieldName ) ) );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+    return (Long) coercions[ pos ].coerce( tuple.getObject( pos ), long.class );
     }
 
   /**
@@ -478,7 +683,8 @@ public class TupleEntry
    */
   public short getShort( Comparable fieldName )
     {
-    return tuple.getShort( fields.getPos( asFieldName( fieldName ) ) );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+    return (Short) coercions[ pos ].coerce( tuple.getObject( pos ), short.class );
     }
 
   /**
@@ -493,7 +699,8 @@ public class TupleEntry
    */
   public boolean getBoolean( Comparable fieldName )
     {
-    return tuple.getBoolean( fields.getPos( asFieldName( fieldName ) ) );
+    int pos = fields.getPos( asFieldName( fieldName ) );
+    return (Boolean) coercions[ pos ].coerce( tuple.getObject( pos ), boolean.class );
     }
 
   private Comparable asFieldName( Comparable fieldName )
@@ -509,7 +716,7 @@ public class TupleEntry
    */
   public TupleEntry selectEntry( Fields selector )
     {
-    if( selector == null || selector.isAll() )
+    if( selector == null || selector.isAll() || fields == selector )
       return this;
 
     if( selector.isNone() )
@@ -520,17 +727,37 @@ public class TupleEntry
 
   /**
    * Method selectTuple selects the fields specified in selector from this instance.
+   * <p/>
+   * This method may return the underlying Tuple instance without copying it. See {@link #selectTupleCopy(Fields)}
+   * to guarantee a copy suitable for modifying or caching/storing in a local collection.
    *
    * @param selector Fields selector that selects the values to return
    * @return Tuple
    */
   public Tuple selectTuple( Fields selector )
     {
-    if( selector == null || selector.isAll() )
+    if( selector == null || selector.isAll() || fields == selector )
       return this.tuple;
 
     if( selector.isNone() )
       return Tuple.NULL;
+
+    return tuple.get( fields, selector );
+    }
+
+  /**
+   * Method selectTuple selects the fields specified in selector from this instance.
+   *
+   * @param selector Fields selector that selects the values to return
+   * @return Tuple
+   */
+  public Tuple selectTupleCopy( Fields selector )
+    {
+    if( selector == null || selector.isAll() || fields == selector )
+      return new Tuple( this.tuple );
+
+    if( selector.isNone() )
+      return new Tuple();
 
     return tuple.get( fields, selector );
     }
@@ -555,12 +782,14 @@ public class TupleEntry
   /**
    * Method set sets the values from the given tupleEntry into this TupleEntry instance based on the given
    * tupleEntry field names.
+   * <p/>
+   * If type information is given, each incoming value will be coerced from its canonical type to the given types.
    *
    * @param tupleEntry of type TupleEntry
    */
   public void set( TupleEntry tupleEntry )
     {
-    this.tuple.set( fields, tupleEntry.getFields(), tupleEntry.getTuple() );
+    this.tuple.set( fields, tupleEntry.getFields(), tupleEntry.getTuple(), tupleEntry.coercions );
     }
 
   /**
@@ -571,12 +800,10 @@ public class TupleEntry
    */
   public TupleEntry appendNew( TupleEntry entry )
     {
-    TupleEntry result = new TupleEntry();
+    Fields appendedFields = fields.append( entry.fields.isUnknown() ? Fields.size( entry.tuple.size() ) : entry.fields );
+    Tuple appendedTuple = tuple.append( entry.tuple );
 
-    result.fields = fields.append( entry.fields.isUnknown() ? Fields.size( entry.tuple.size() ) : entry.fields );
-    result.tuple = tuple.append( entry.tuple );
-
-    return result;
+    return new TupleEntry( appendedFields, appendedTuple );
     }
 
   @Override
@@ -617,5 +844,54 @@ public class TupleEntry
       return "fields: " + fields.print();
     else
       return "fields: " + fields.print() + " tuple: " + tuple.print();
+    }
+
+  /**
+   * Method asIterableOf returns an {@link Iterable} instance that will coerce all Tuple elements
+   * into the given {@code type} parameter.
+   * <p/>
+   * This method honors any {@link cascading.tuple.type.CoercibleType} instances on the internal
+   * Fields instance for the specified Tuple element.
+   *
+   * @param type of type Class
+   * @return an Iterable
+   */
+  public <T> Iterable<T> asIterableOf( final Class<T> type )
+    {
+    return new Iterable<T>()
+    {
+    @Override
+    public Iterator<T> iterator()
+      {
+      final Iterator<CoercibleType> coercibleIterator = coercions.length == 0 ?
+        OBJECT_ITERATOR :
+        Arrays.asList( coercions ).iterator();
+
+      final Iterator valuesIterator = tuple.iterator();
+
+      return new Iterator<T>()
+      {
+      @Override
+      public boolean hasNext()
+        {
+        return valuesIterator.hasNext();
+        }
+
+      @Override
+      public T next()
+        {
+        Object next = valuesIterator.next();
+
+        return (T) coercibleIterator.next().coerce( next, type );
+        }
+
+      @Override
+      public void remove()
+        {
+        valuesIterator.remove();
+        }
+      };
+      }
+    };
     }
   }

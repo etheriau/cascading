@@ -30,6 +30,7 @@ import java.util.Set;
 
 import cascading.CascadingException;
 import cascading.flow.planner.FlowPlanner;
+import cascading.flow.planner.PlatformInfo;
 import cascading.pipe.Pipe;
 import cascading.property.AppProps;
 import cascading.property.PropertyUtil;
@@ -114,7 +115,7 @@ public abstract class FlowConnector
   public Class getIntermediateSchemeClass( Map<Object, Object> properties )
     {
     // supporting stuffed classes to overcome classloading issue
-    Object type = PropertyUtil.getProperty( properties, FlowConnectorProps.INTERMEDIATE_SCHEME_CLASS, (Object) null );
+    Object type = PropertyUtil.getProperty( properties, FlowConnectorProps.INTERMEDIATE_SCHEME_CLASS, null );
 
     if( type == null )
       return getDefaultIntermediateSchemeClass();
@@ -455,6 +456,16 @@ public abstract class FlowConnector
     }
 
   protected abstract FlowPlanner createFlowPlanner();
+
+  /**
+   * Method getPlatformInfo returns an instance of {@link PlatformInfo} for the underlying platform.
+   *
+   * @return of type PlatformInfo
+   */
+  public PlatformInfo getPlatformInfo()
+    {
+    return createFlowPlanner().getPlatformInfo();
+    }
 
   /////////
   // UTIL

@@ -21,6 +21,7 @@
 package cascading.operation.aggregator;
 
 import java.beans.ConstructorProperties;
+import java.lang.reflect.Type;
 
 import cascading.flow.FlowProcess;
 import cascading.operation.Aggregator;
@@ -29,7 +30,9 @@ import cascading.operation.BaseOperation;
 import cascading.operation.OperationCall;
 import cascading.tuple.Fields;
 import cascading.tuple.Tuple;
-import cascading.tuple.Tuples;
+import cascading.tuple.TupleEntry;
+import cascading.tuple.coerce.Coercions;
+import cascading.tuple.type.CoercibleType;
 import cascading.util.Pair;
 
 /** Class Sum is an {@link Aggregator} that returns the sum of all numeric values in the current group. */
@@ -39,17 +42,22 @@ public class Sum extends BaseOperation<Pair<Double[], Tuple>> implements Aggrega
   public static final String FIELD_NAME = "sum";
 
   /** Field type */
-  private Class type = double.class;
+  private Type type = double.class;
+  private CoercibleType canonical;
+
 
   /** Constructor Sum creates a new Sum instance that accepts one argument and returns a single field named "sum". */
   public Sum()
     {
     super( 1, new Fields( FIELD_NAME ) );
+    this.canonical = Coercions.coercibleTypeFor( this.type );
     }
 
   /**
    * Constructs a new instance that returns the fields declared in fieldDeclaration and accepts
    * only 1 argument.
+   * <p/>
+   * If the given {@code fieldDeclaration} has a type, it will be used to coerce the result value.
    *
    * @param fieldDeclaration of type Fields
    */
@@ -60,6 +68,11 @@ public class Sum extends BaseOperation<Pair<Double[], Tuple>> implements Aggrega
 
     if( !fieldDeclaration.isSubstitution() && fieldDeclaration.size() != 1 )
       throw new IllegalArgumentException( "fieldDeclaration may only declare 1 field, got: " + fieldDeclaration.size() );
+
+    if( fieldDeclaration.hasTypes() )
+      this.type = fieldDeclaration.getType( 0 );
+
+    this.canonical = Coercions.coercibleTypeFor( this.type );
     }
 
   /**
@@ -74,24 +87,34 @@ public class Sum extends BaseOperation<Pair<Double[], Tuple>> implements Aggrega
     {
     this( fieldDeclaration );
     this.type = type;
+    this.canonical = Coercions.coercibleTypeFor( this.type );
     }
 
   @Override
   public void prepare( FlowProcess flowProcess, OperationCall<Pair<Double[], Tuple>> operationCall )
     {
-    operationCall.setContext( new Pair<Double[], Tuple>( new Double[]{0.0D}, Tuple.size( 1 ) ) );
+    operationCall.setContext( new Pair<Double[], Tuple>( new Double[]{null}, Tuple.size( 1 ) ) );
     }
 
   @Override
   public void start( FlowProcess flowProcess, AggregatorCall<Pair<Double[], Tuple>> aggregatorCall )
     {
-    aggregatorCall.getContext().getLhs()[ 0 ] = 0.0D;
+    aggregatorCall.getContext().getLhs()[ 0 ] = null;
+    aggregatorCall.getContext().getRhs().set( 0, null );
     }
 
   @Override
   public void aggregate( FlowProcess flowProcess, AggregatorCall<Pair<Double[], Tuple>> aggregatorCall )
     {
-    aggregatorCall.getContext().getLhs()[ 0 ] += aggregatorCall.getArguments().getDouble( 0 );
+    TupleEntry arguments = aggregatorCall.getArguments();
+
+    if( arguments.getObject( 0 ) == null )
+      return;
+
+    Double[] sum = aggregatorCall.getContext().getLhs();
+
+    double value = sum[ 0 ] == null ? 0 : sum[ 0 ];
+    sum[ 0 ] = value + arguments.getDouble( 0 );
     }
 
   @Override
@@ -102,7 +125,7 @@ public class Sum extends BaseOperation<Pair<Double[], Tuple>> implements Aggrega
 
   protected Tuple getResult( AggregatorCall<Pair<Double[], Tuple>> aggregatorCall )
     {
-    aggregatorCall.getContext().getRhs().set( 0, Tuples.coerce( aggregatorCall.getContext().getLhs()[ 0 ], type ) );
+    aggregatorCall.getContext().getRhs().set( 0, canonical.canonical( aggregatorCall.getContext().getLhs()[ 0 ] ) );
 
     return aggregatorCall.getContext().getRhs();
     }

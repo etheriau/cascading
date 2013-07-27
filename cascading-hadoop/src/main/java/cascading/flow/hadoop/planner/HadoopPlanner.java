@@ -32,7 +32,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.TreeSet;
 
-import cascading.flow.Flow;
 import cascading.flow.FlowConnector;
 import cascading.flow.FlowDef;
 import cascading.flow.FlowElement;
@@ -78,7 +77,7 @@ import static cascading.flow.planner.ElementGraphs.getAllShortestPathsBetween;
  * For example, {@code properties.set("mapred.child.java.opts","-Xmx512m");} would convince Hadoop
  * to spawn all child jvms with a heap of 512MB.
  */
-public class HadoopPlanner extends FlowPlanner
+public class HadoopPlanner extends FlowPlanner<HadoopFlow, JobConf>
   {
   /** Field LOG */
   private static final Logger LOG = LoggerFactory.getLogger( HadoopPlanner.class );
@@ -111,24 +110,35 @@ public class HadoopPlanner extends FlowPlanner
     {
     JobConf conf = new JobConf();
 
+    copyProperties( conf, properties );
+
+    return conf;
+    }
+
+  /**
+   * Method copyProperties adds the given Map values to the given JobConf object.
+   *
+   * @param jobConf    of type JobConf
+   * @param properties of type Map
+   */
+  public static void copyProperties( JobConf jobConf, Map<Object, Object> properties )
+    {
     if( properties instanceof Properties )
       {
       Properties props = (Properties) properties;
       Set<String> keys = props.stringPropertyNames();
 
       for( String key : keys )
-        conf.set( key, props.getProperty( key ) );
+        jobConf.set( key, props.getProperty( key ) );
       }
     else
       {
       for( Map.Entry<Object, Object> entry : properties.entrySet() )
         {
         if( entry.getValue() != null )
-          conf.set( entry.getKey().toString(), entry.getValue().toString() );
+          jobConf.set( entry.getKey().toString(), entry.getValue().toString() );
         }
       }
-
-    return conf;
     }
 
   /**
@@ -155,6 +165,12 @@ public class HadoopPlanner extends FlowPlanner
   public static boolean getNormalizeHeterogeneousSources( Map<Object, Object> properties )
     {
     return Boolean.parseBoolean( PropertyUtil.getProperty( properties, "cascading.multimapreduceplanner.normalizesources", "false" ) );
+    }
+
+  @Override
+  public JobConf getConfig()
+    {
+    return jobConf;
     }
 
   @Override
@@ -188,18 +204,28 @@ public class HadoopPlanner extends FlowPlanner
     }
 
   @Override
-  public Flow buildFlow( FlowDef flowDef )
+  protected HadoopFlow createFlow( FlowDef flowDef )
+    {
+    return new HadoopFlow( getPlatformInfo(), getProperties(), getConfig(), flowDef );
+    }
+
+  @Override
+  public HadoopFlow buildFlow( FlowDef flowDef )
     {
     ElementGraph elementGraph = null;
 
     try
       {
       // generic
-      verifyAssembly( flowDef );
+      verifyAllTaps( flowDef );
 
-      HadoopFlow flow = new HadoopFlow( getPlatformInfo(), properties, jobConf, flowDef );
+      HadoopFlow flow = createFlow( flowDef );
 
-      elementGraph = createElementGraph( flowDef );
+      Pipe[] tails = resolveTails( flowDef, flow );
+
+      verifyAssembly( flowDef, tails );
+
+      elementGraph = createElementGraph( flowDef, tails );
 
       // rules
       failOnLoneGroupAssertion( elementGraph );

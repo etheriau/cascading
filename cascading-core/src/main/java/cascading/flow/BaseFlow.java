@@ -87,6 +87,8 @@ public abstract class BaseFlow<Config> implements Flow<Config>
   private String name;
   /** Fields runID */
   private String runID;
+  /** Fields classpath */
+  private List<String> classPath; // may remain null
   /** Field tags */
   private String tags;
   /** Field listeners */
@@ -156,7 +158,6 @@ public abstract class BaseFlow<Config> implements Flow<Config>
     this.name = name;
     addSessionProperties( properties );
     initConfig( properties, defaultConfig );
-    initFromProperties( properties );
 
     this.flowStats = createPrepareFlowStats(); // must be last
     }
@@ -167,6 +168,7 @@ public abstract class BaseFlow<Config> implements Flow<Config>
     this.name = flowDef.getName();
     this.tags = flowDef.getTags();
     this.runID = flowDef.getRunID();
+    this.classPath = flowDef.getClassPath();
 
     addSessionProperties( properties );
     initConfig( properties, defaultConfig );
@@ -174,7 +176,6 @@ public abstract class BaseFlow<Config> implements Flow<Config>
     setSinks( flowDef.getSinksCopy() );
     setTraps( flowDef.getTrapsCopy() );
     setCheckpoints( flowDef.getCheckpointsCopy() );
-    initFromProperties( properties );
     initFromTaps();
 
     retrieveSourceFields();
@@ -433,8 +434,8 @@ public abstract class BaseFlow<Config> implements Flow<Config>
    * This method creates a new internal Config with the parentConfig as defaults using the properties to override
    * the defaults.
    *
-   * @param properties
-   * @param parentConfig
+   * @param properties   of type Map
+   * @param parentConfig of type Config
    */
   protected abstract void initConfig( Map<Object, Object> properties, Config parentConfig );
 
@@ -535,6 +536,12 @@ public abstract class BaseFlow<Config> implements Flow<Config>
     }
 
   @Override
+  public List<String> getSourceNames()
+    {
+    return new ArrayList<String>( sources.keySet() );
+    }
+
+  @Override
   public Tap getSource( String name )
     {
     return sources.get( name );
@@ -551,6 +558,12 @@ public abstract class BaseFlow<Config> implements Flow<Config>
   public Map<String, Tap> getSinks()
     {
     return Collections.unmodifiableMap( sinks );
+    }
+
+  @Override
+  public List<String> getSinkNames()
+    {
+    return new ArrayList<String>( sinks.keySet() );
     }
 
   @Override
@@ -579,6 +592,12 @@ public abstract class BaseFlow<Config> implements Flow<Config>
     }
 
   @Override
+  public List<String> getTrapNames()
+    {
+    return new ArrayList<String>( traps.keySet() );
+    }
+
+  @Override
   public Collection<Tap> getTrapsCollection()
     {
     return getTraps().values();
@@ -588,6 +607,12 @@ public abstract class BaseFlow<Config> implements Flow<Config>
   public Map<String, Tap> getCheckpoints()
     {
     return Collections.unmodifiableMap( checkpoints );
+    }
+
+  @Override
+  public List<String> getCheckpointNames()
+    {
+    return new ArrayList<String>( checkpoints.keySet() );
     }
 
   @Override
@@ -704,7 +729,7 @@ public abstract class BaseFlow<Config> implements Flow<Config>
     steps = new ArrayList<FlowStep<Config>>();
 
     while( topoIterator.hasNext() )
-      steps.add( (FlowStep<Config>) topoIterator.next() );
+      steps.add( topoIterator.next() );
 
     return steps;
     }
@@ -741,7 +766,14 @@ public abstract class BaseFlow<Config> implements Flow<Config>
 
     String threadName = ( "flow " + Util.toNull( getName() ) ).trim();
 
-    thread = new Thread( new Runnable()
+    thread = createFlowThread( threadName );
+
+    thread.start();
+    }
+
+  protected Thread createFlowThread( String threadName )
+    {
+    return new Thread( new Runnable()
     {
     @Override
     public void run()
@@ -749,8 +781,6 @@ public abstract class BaseFlow<Config> implements Flow<Config>
       BaseFlow.this.run();
       }
     }, threadName );
-
-    thread.start();
     }
 
   protected abstract void internalStart();
@@ -820,6 +850,9 @@ public abstract class BaseFlow<Config> implements Flow<Config>
 
       if( throwable instanceof CascadingException )
         throw (CascadingException) throwable;
+
+      if( throwable instanceof OutOfMemoryError )
+        throw (OutOfMemoryError) throwable;
 
       if( throwable != null )
         throw new FlowException( getName(), "unhandled exception", throwable );
@@ -1152,7 +1185,7 @@ public abstract class BaseFlow<Config> implements Flow<Config>
       List<FlowStepJob<Config>> predecessors = new ArrayList<FlowStepJob<Config>>();
 
       for( Object flowStep : predecessorListOf( flowStepGraph, step ) )
-        predecessors.add( (FlowStepJob<Config>) jobsMap.get( ( (FlowStep<Config>) flowStep ).getName() ) );
+        predecessors.add( jobsMap.get( ( (FlowStep<Config>) flowStep ).getName() ) );
 
       flowStepJob.setPredecessors( predecessors );
 
@@ -1201,7 +1234,7 @@ public abstract class BaseFlow<Config> implements Flow<Config>
     logInfo( "shutdown complete" );
     }
 
-  private void fireOnCompleted()
+  protected void fireOnCompleted()
     {
     if( hasListeners() )
       {
@@ -1213,7 +1246,7 @@ public abstract class BaseFlow<Config> implements Flow<Config>
       }
     }
 
-  private void fireOnThrowable()
+  protected void fireOnThrowable()
     {
     if( hasListeners() )
       {
@@ -1333,6 +1366,11 @@ public abstract class BaseFlow<Config> implements Flow<Config>
   public String getRunID()
     {
     return runID;
+    }
+
+  protected List<String> getClassPath()
+    {
+    return classPath;
     }
 
   @Override

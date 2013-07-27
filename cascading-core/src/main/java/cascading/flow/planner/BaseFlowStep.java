@@ -599,10 +599,6 @@ public abstract class BaseFlowStep<Config> implements Serializable, FlowStep<Con
   private List<GraphPath<FlowElement, Scope>> getPathsBetween( FlowElement from, FlowElement to )
     {
     KShortestPaths<FlowElement, Scope> paths = new KShortestPaths<FlowElement, Scope>( graph, from, Integer.MAX_VALUE );
-
-    if( paths == null )
-      return Collections.EMPTY_LIST;
-
     List<GraphPath<FlowElement, Scope>> results = paths.getPaths( to );
 
     if( results == null )
@@ -695,8 +691,16 @@ public abstract class BaseFlowStep<Config> implements Serializable, FlowStep<Con
         {
         FlowElement element = iterator.next();
 
-        if( element.hasStepConfigDef() )
-          element.getStepConfigDef().apply( mode, setter );
+        while( element != null )
+          {
+          if( element.hasStepConfigDef() )
+            element.getStepConfigDef().apply( mode, setter );
+
+          if( element instanceof Pipe )
+            element = ( (Pipe) element ).getParent();
+          else
+            element = null;
+          }
         }
       }
     }

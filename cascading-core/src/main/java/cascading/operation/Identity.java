@@ -21,6 +21,7 @@
 package cascading.operation;
 
 import java.beans.ConstructorProperties;
+import java.lang.reflect.Type;
 import java.util.Arrays;
 
 import cascading.flow.FlowProcess;
@@ -28,7 +29,6 @@ import cascading.tuple.Fields;
 import cascading.tuple.Tuple;
 import cascading.tuple.TupleEntry;
 import cascading.tuple.TupleEntryCollector;
-import cascading.tuple.Tuples;
 
 /**
  * The Identity function simply passes incoming arguments back out again. Optionally argument fields can be renamed, and/or
@@ -37,10 +37,10 @@ import cascading.tuple.Tuples;
  * During coercion, if the given type is a primitive ({@code long}), and the tuple value is null, {@code 0} is returned.
  * If the type is an Object ({@code java.lang.Long}), and the tuple value is {@code null}, {@code null} is returned.
  */
-public class Identity extends BaseOperation<Tuple> implements Function<Tuple>
+public class Identity extends BaseOperation<Identity.Functor> implements Function<Identity.Functor>
   {
   /** Field types */
-  private Class[] types = null;
+  private Type[] types = null;
 
   /**
    * Constructor Identity creates a new Identity instance that will pass the argument values to its output. Use this
@@ -77,6 +77,8 @@ public class Identity extends BaseOperation<Tuple> implements Function<Tuple>
   public Identity( Fields fieldDeclaration )
     {
     super( fieldDeclaration ); // don't need to set size, default is ANY
+
+    this.types = fieldDeclaration.getTypes();
     }
 
   /**
@@ -97,22 +99,49 @@ public class Identity extends BaseOperation<Tuple> implements Function<Tuple>
     }
 
   @Override
-  public void prepare( FlowProcess flowProcess, OperationCall<Tuple> operationCall )
+  public void prepare( FlowProcess flowProcess, OperationCall<Functor> operationCall )
     {
+    Functor functor;
+
     if( types != null )
-      operationCall.setContext( Tuple.size( types.length ) );
+      {
+      functor = new Functor()
+      {
+      Tuple result = Tuple.size( types.length );
+
+      @Override
+      public void operate( FunctionCall<Functor> functionCall )
+        {
+        TupleEntry input = functionCall.getArguments();
+        TupleEntryCollector outputCollector = functionCall.getOutputCollector();
+
+        outputCollector.add( input.getCoercedTuple( types, result ) );
+        }
+      };
+      }
+    else
+      {
+      functor = new Functor()
+      {
+      @Override
+      public void operate( FunctionCall<Functor> functionCall )
+        {
+        TupleEntryCollector outputCollector = functionCall.getOutputCollector();
+
+        outputCollector.add( functionCall.getArguments().getTuple() );
+        }
+      };
+      operationCall.setContext( functor );
+      }
+
+    operationCall.setContext( functor );
+
     }
 
   @Override
-  public void operate( FlowProcess flowProcess, FunctionCall<Tuple> functionCall )
+  public void operate( FlowProcess flowProcess, FunctionCall<Functor> functionCall )
     {
-    TupleEntry input = functionCall.getArguments();
-    TupleEntryCollector outputCollector = functionCall.getOutputCollector();
-
-    if( types == null )
-      outputCollector.add( input.getTuple() );
-    else
-      outputCollector.add( Tuples.coerce( input.getTuple(), types, functionCall.getContext() ) );
+    functionCall.getContext().operate( functionCall );
     }
 
   @Override
@@ -139,5 +168,10 @@ public class Identity extends BaseOperation<Tuple> implements Function<Tuple>
     int result = super.hashCode();
     result = 31 * result + ( types != null ? Arrays.hashCode( types ) : 0 );
     return result;
+    }
+
+  interface Functor
+    {
+    void operate( FunctionCall<Functor> functionCall );
     }
   }

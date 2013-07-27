@@ -35,11 +35,14 @@ import cascading.platform.TestPlatform;
 import cascading.scheme.Scheme;
 import cascading.scheme.local.TextDelimited;
 import cascading.scheme.local.TextLine;
+import cascading.scheme.util.DelimitedParser;
+import cascading.scheme.util.FieldTypeResolver;
 import cascading.tap.SinkMode;
 import cascading.tap.Tap;
 import cascading.tap.local.FileTap;
 import cascading.tap.local.TemplateTap;
 import cascading.tuple.Fields;
+import org.apache.commons.io.FileUtils;
 
 /**
  * Class LocalPlatform is automatically loaded and injected into a {@link cascading.PlatformTestCase} instance
@@ -48,6 +51,10 @@ import cascading.tuple.Fields;
 public class LocalPlatform extends TestPlatform
   {
   private Properties properties = new Properties();
+
+  {
+  properties.putAll( getGlobalProperties() );
+  }
 
   @Override
   public void setUp() throws IOException
@@ -79,6 +86,29 @@ public class LocalPlatform extends TestPlatform
   public boolean remoteExists( String outputFile ) throws IOException
     {
     return new File( outputFile ).exists();
+    }
+
+  @Override
+  public boolean remoteRemove( String outputFile, boolean recursive ) throws IOException
+    {
+    if( !remoteExists( outputFile ) )
+      return true;
+
+    File file = new File( outputFile );
+
+    if( !recursive || !file.isDirectory() )
+      return file.delete();
+
+    try
+      {
+      FileUtils.deleteDirectory( file );
+      }
+    catch( IOException exception )
+      {
+      return false;
+      }
+
+    return !file.exists();
     }
 
   @Override
@@ -118,6 +148,12 @@ public class LocalPlatform extends TestPlatform
   public Tap getDelimitedFile( Fields fields, boolean skipHeader, boolean writeHeader, String delimiter, String quote, Class[] types, String filename, SinkMode mode )
     {
     return new FileTap( new TextDelimited( fields, skipHeader, writeHeader, delimiter, quote, types ), filename, mode );
+    }
+
+  @Override
+  public Tap getDelimitedFile( String delimiter, String quote, FieldTypeResolver fieldTypeResolver, String filename, SinkMode mode )
+    {
+    return new FileTap( new TextDelimited( true, new DelimitedParser( delimiter, quote, fieldTypeResolver ) ), filename, mode );
     }
 
   @Override

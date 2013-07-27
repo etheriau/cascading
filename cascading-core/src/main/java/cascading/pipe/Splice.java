@@ -20,7 +20,9 @@
 
 package cascading.pipe;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -36,6 +38,7 @@ import cascading.pipe.joiner.Joiner;
 import cascading.tuple.Fields;
 import cascading.tuple.FieldsResolverException;
 import cascading.tuple.TupleException;
+import cascading.tuple.coerce.Coercions;
 import cascading.util.Util;
 
 import static java.util.Arrays.asList;
@@ -859,9 +862,9 @@ public class Splice extends Pipe
       {
       if( buffer.length() != 0 )
         {
-        if( isGroupBy() )
+        if( isGroupBy() || isMerge() )
           buffer.append( "+" );
-        else
+        else if( isCoGroup() || isJoin() )
           buffer.append( "*" ); // more semantically correct
         }
 
@@ -998,7 +1001,7 @@ public class Splice extends Pipe
     for( Scope scope : incomingScopes )
       incomingFields.put( scope.getName(), scope.getIncomingSpliceFields() );
 
-    Fields outGroupingFields = new Fields();
+    Fields outGroupingFields = Fields.NONE;
 
     int offset = 0;
     for( Pipe pipe : pipes ) // need to retain order of pipes
@@ -1007,10 +1010,13 @@ public class Splice extends Pipe
       Fields pipeGroupingSelector = groupingSelectors.get( pipeName );
       Fields incomingField = incomingFields.get( pipeName );
 
-      Fields offsetFields = incomingField.selectPos( pipeGroupingSelector, offset );
-      Fields resolvedSelect = declared.select( offsetFields );
+      if( !pipeGroupingSelector.isNone() )
+        {
+        Fields offsetFields = incomingField.selectPos( pipeGroupingSelector, offset );
+        Fields resolvedSelect = declared.select( offsetFields );
 
-      outGroupingFields = outGroupingFields.append( resolvedSelect );
+        outGroupingFields = outGroupingFields.append( resolvedSelect );
+        }
 
       offset += incomingField.size();
       }
@@ -1025,18 +1031,11 @@ public class Splice extends Pipe
       Map<String, Fields> groupingSelectors = getKeySelectors();
       Map<String, Fields> groupingFields = resolveSelectorsAgainstIncoming( incomingScopes, groupingSelectors, "grouping" );
 
-      Iterator<Fields> iterator = groupingFields.values().iterator();
-      int size = iterator.next().size();
+      if( !verifySameSize( groupingFields ) )
+        throw new OperatorException( this, "all grouping fields must be same size: " + toString() );
 
-      while( iterator.hasNext() )
-        {
-        Fields groupingField = iterator.next();
-
-        if( groupingField.size() != size )
-          throw new OperatorException( this, "all grouping fields must be same size:" + toString() );
-
-        size = groupingField.size();
-        }
+      if( !verifySameTypes( groupingSelectors, groupingFields ) )
+        throw new OperatorException( this, "all grouping fields must declare same types: " + toString() );
 
       return groupingFields;
       }
@@ -1048,6 +1047,77 @@ public class Splice extends Pipe
       {
       throw new OperatorException( this, "could not resolve grouping selector in: " + this, exception );
       }
+    }
+
+  private boolean verifySameTypes( Map<String, Fields> groupingSelectors, Map<String, Fields> groupingFields )
+    {
+    // create array of field positions with comparators
+    // unsure which side has the comparators declared so make a union
+    boolean[] hasComparator = new boolean[ groupingFields.values().iterator().next().size() ];
+
+    for( Map.Entry<String, Fields> entry : groupingSelectors.entrySet() )
+      {
+      Comparator[] comparatorsArray = entry.getValue().getComparators();
+
+      for( int i = 0; i < comparatorsArray.length; i++ )
+        hasComparator[ i ] = hasComparator[ i ] || comparatorsArray[ i ] != null;
+      }
+
+    Iterator<Fields> iterator = groupingFields.values().iterator();
+    Type[] types = iterator.next().getTypes();
+
+    // if types are null, no basis for comparison
+    if( types == null )
+      return true;
+
+    while( iterator.hasNext() )
+      {
+      Fields groupingField = iterator.next();
+      Type[] groupingTypes = groupingField.getTypes();
+
+      // if types are null, no basis for comparison
+      if( groupingTypes == null )
+        return true;
+
+      for( int i = 0; i < types.length; i++ )
+        {
+        if( hasComparator[ i ] )
+          continue;
+
+        Type lhs = types[ i ];
+        Type rhs = groupingTypes[ i ];
+
+        // if one side is primitive, up-class to its primitive wrapper type
+        if( lhs instanceof Class && rhs instanceof Class )
+          {
+          lhs = Coercions.asNonPrimitive( (Class) lhs );
+          rhs = Coercions.asNonPrimitive( (Class) rhs );
+          }
+
+        if( !lhs.equals( rhs ) )
+          return false;
+        }
+      }
+
+    return true;
+    }
+
+  private boolean verifySameSize( Map<String, Fields> groupingFields )
+    {
+    Iterator<Fields> iterator = groupingFields.values().iterator();
+    int size = iterator.next().size();
+
+    while( iterator.hasNext() )
+      {
+      Fields groupingField = iterator.next();
+
+      if( groupingField.size() != size )
+        return false;
+
+      size = groupingField.size();
+      }
+
+    return true;
     }
 
   private Map<String, Fields> resolveSelectorsAgainstIncoming( Set<Scope> incomingScopes, Map<String, Fields> selectors, String type )
@@ -1119,16 +1189,12 @@ public class Splice extends Pipe
         int size = 0;
         boolean foundUnknown = false;
 
-        List<Fields> resolvedFields = new ArrayList<Fields>();
+        List<Fields> appendableFields = getOrderedResolvedFields( incomingScopes );
 
-        for( Scope incomingScope : incomingScopes )
+        for( Fields fields : appendableFields )
           {
-          Fields fields = incomingScope.getIncomingSpliceFields();
-
           foundUnknown = foundUnknown || fields.isUnknown();
           size += fields.size();
-
-          resolvedFields.add( fields );
           }
 
         // we must relax field checking in the face of unkown fields
@@ -1137,7 +1203,27 @@ public class Splice extends Pipe
           if( isSelfJoin() )
             throw new OperatorException( this, "declared grouped fields not same size as grouped values, declared: " + declaredFields.printVerbose() + " != size: " + size * ( numSelfJoins + 1 ) );
           else
-            throw new OperatorException( this, "declared grouped fields not same size as grouped values, declared: " + declaredFields.printVerbose() + " resolved: " + Util.print( resolvedFields, "" ) );
+            throw new OperatorException( this, "declared grouped fields not same size as grouped values, declared: " + declaredFields.printVerbose() + " resolved: " + Util.print( appendableFields, "" ) );
+          }
+
+        int i = 0;
+        for( Fields appendableField : appendableFields )
+          {
+          Type[] types = appendableField.getTypes();
+
+          if( types == null )
+            {
+            i += appendableField.size();
+            continue;
+            }
+
+          for( Type type : types )
+            {
+            if( type != null )
+              declaredFields = declaredFields.applyType( i, type );
+
+            i++;
+            }
           }
 
         return declaredFields;
@@ -1146,37 +1232,28 @@ public class Splice extends Pipe
       // support merge or cogrouping here
       if( isGroupBy() || isMerge() )
         {
-        Fields commonFields = null;
+        Iterator<Scope> iterator = incomingScopes.iterator();
+        Fields commonFields = iterator.next().getIncomingSpliceFields();
 
-        for( Scope incomingScope : incomingScopes )
+        while( iterator.hasNext() )
           {
+          Scope incomingScope = iterator.next();
           Fields fields = incomingScope.getIncomingSpliceFields();
 
-          if( commonFields == null )
-            commonFields = fields;
-          else if( !commonFields.equals( fields ) )
-            throw new OperatorException( this, "merged streams must declare the same field names, expected: " + commonFields.printVerbose() + " found: " + fields.print() );
+          if( !commonFields.equalsFields( fields ) )
+            throw new OperatorException( this, "merged streams must declare the same field names, expected: " + commonFields.printVerbose() + " found: " + fields.printVerbose() );
           }
 
         return commonFields;
         }
       else
         {
-        Map<String, Scope> scopesMap = new HashMap<String, Scope>();
-
-        for( Scope incomingScope : incomingScopes )
-          scopesMap.put( incomingScope.getName(), incomingScope );
-
-        List<Fields> appendableFields = new ArrayList<Fields>();
-
-        for( Pipe pipe : pipes )
-          appendableFields.add( scopesMap.get( pipe.getName() ).getIncomingSpliceFields() );
-
+        List<Fields> appendableFields = getOrderedResolvedFields( incomingScopes );
         Fields appendedFields = new Fields();
 
         try
           {
-          // will throwFail on name collisions
+          // will fail on name collisions
           for( Fields appendableField : appendableFields )
             appendedFields = appendedFields.append( appendableField );
           }
@@ -1201,6 +1278,20 @@ public class Splice extends Pipe
       {
       throw new OperatorException( this, "could not resolve declared fields in: " + this, exception );
       }
+    }
+
+  private List<Fields> getOrderedResolvedFields( Set<Scope> incomingScopes )
+    {
+    Map<String, Scope> scopesMap = new HashMap<String, Scope>();
+
+    for( Scope incomingScope : incomingScopes )
+      scopesMap.put( incomingScope.getName(), incomingScope );
+
+    List<Fields> appendableFields = new ArrayList<Fields>();
+
+    for( Pipe pipe : pipes )
+      appendableFields.add( scopesMap.get( pipe.getName() ).getIncomingSpliceFields() );
+    return appendableFields;
     }
 
   @Override
@@ -1267,7 +1358,7 @@ public class Splice extends Pipe
     for( String name : keyFieldsMap.keySet() )
       {
       if( keyFieldsMap.size() > 1 )
-        buffer.append( name ).append( ":" );
+        buffer.append( " " ).append( name ).append( ":" );
 
       buffer.append( keyFieldsMap.get( name ).printVerbose() );
       }

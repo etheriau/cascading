@@ -38,6 +38,8 @@ import cascading.platform.TestPlatform;
 import cascading.scheme.Scheme;
 import cascading.scheme.hadoop.TextDelimited;
 import cascading.scheme.hadoop.TextLine;
+import cascading.scheme.util.DelimitedParser;
+import cascading.scheme.util.FieldTypeResolver;
 import cascading.tap.SinkMode;
 import cascading.tap.Tap;
 import cascading.tap.hadoop.Hfs;
@@ -45,6 +47,7 @@ import cascading.tap.hadoop.TemplateTap;
 import cascading.tap.hadoop.util.Hadoop18TapUtil;
 import cascading.tuple.Fields;
 import cascading.util.Util;
+import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.FileUtil;
 import org.apache.hadoop.fs.Path;
@@ -106,6 +109,7 @@ public class HadoopPlatform extends TestPlatform
       {
       LOG.info( "not using cluster" );
       jobConf = new JobConf();
+      fileSys = FileSystem.get( jobConf );
       }
     else
       {
@@ -140,11 +144,16 @@ public class HadoopPlatform extends TestPlatform
     jobConf.setNumMapTasks( numMapTasks );
     jobConf.setNumReduceTasks( numReduceTasks );
 
-    if( logger != null )
-      properties.put( "log4j.logger", logger );
+    Map<Object, Object> globalProperties = getGlobalProperties();
 
-    FlowProps.setJobPollingInterval( properties, 10 ); // should speed up tests
-    HadoopPlanner.copyJobConf( properties, jobConf );
+    if( logger != null )
+      globalProperties.put( "log4j.logger", logger );
+
+    FlowProps.setJobPollingInterval( globalProperties, 10 ); // should speed up tests
+
+    HadoopPlanner.copyProperties( jobConf, globalProperties ); // copy any external properties
+
+    HadoopPlanner.copyJobConf( properties, jobConf ); // put all properties on the jobconf
     }
 
   @Override
@@ -201,16 +210,44 @@ public class HadoopPlatform extends TestPlatform
     if( !fileSys.exists( path ) )
       throw new FileNotFoundException( "data file not found: " + outputFile );
 
-    if( new File( outputFile ).exists() )
-      new File( outputFile ).delete();
+    File file = new File( outputFile );
 
-    FileUtil.copy( fileSys, path, new File( outputFile ), false, jobConf );
+    if( file.exists() )
+      file.delete();
+
+    if( fileSys.isFile( path ) )
+      {
+      // its a file, so just copy it over
+      FileUtil.copy( fileSys, path, file, false, jobConf );
+      return;
+      }
+
+    // it's a directory
+    file.mkdirs();
+
+    FileStatus contents[] = fileSys.listStatus( path );
+
+    for( FileStatus fileStatus : contents )
+      {
+      Path currentPath = fileStatus.getPath();
+
+      if( currentPath.getName().startsWith( "_" ) ) // filter out temp and log dirs
+        continue;
+
+      FileUtil.copy( fileSys, currentPath, new File( file, currentPath.getName() ), false, jobConf );
+      }
     }
 
   @Override
   public boolean remoteExists( String outputFile ) throws IOException
     {
     return fileSys.exists( new Path( outputFile ) );
+    }
+
+  @Override
+  public boolean remoteRemove( String outputFile, boolean recursive ) throws IOException
+    {
+    return fileSys.delete( new Path( outputFile ), recursive );
     }
 
   @Override
@@ -238,6 +275,12 @@ public class HadoopPlatform extends TestPlatform
   public Tap getDelimitedFile( Fields fields, boolean skipHeader, boolean writeHeader, String delimiter, String quote, Class[] types, String filename, SinkMode mode )
     {
     return new Hfs( new TextDelimited( fields, skipHeader, writeHeader, delimiter, quote, types ), filename, mode );
+    }
+
+  @Override
+  public Tap getDelimitedFile( String delimiter, String quote, FieldTypeResolver fieldTypeResolver, String filename, SinkMode mode )
+    {
+    return new Hfs( new TextDelimited( true, new DelimitedParser( delimiter, quote, fieldTypeResolver ) ), filename, mode );
     }
 
   @Override
