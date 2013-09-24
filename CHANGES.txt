@@ -2,6 +2,12 @@ Cascading Change Log
 
 2.2.0 [unreleased]
 
+  Fixed issue where c.o.t.DateParser would drop incoming Tuples if the argument was null.
+
+  Fixed issue where c.t.Hasher was not honored during grouping in local mode.
+
+  Updated c.t.h.GlobHfs to use fewer resources when deriving member identifiers.
+
   Updated c.t.h.HadoopTapPlatformTest to skip the c.t.h.Dfs test if HDFS filesystem is unavailable on the current
   configuration.
 
@@ -62,8 +68,6 @@ Cascading Change Log
 
   Updated c.o.Buffer to allow implementations to disable nulling of non-grouping fields after the arguments iterator
   has completed. This simplifies appending aggregated fields to the incoming tuple stream.
-
-  Updated c.t.Fields to retain relative positions when calling Fields#append.
 
   Updated c.t.Fields to return appending value when calling Fields#append on Fields.NONE and optimized Fields#subtract
   when subtracting Fields.NONE.
