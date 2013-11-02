@@ -261,19 +261,19 @@ public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Con
     if( super.getScheme() != null )
       return super.getScheme();
 
-    Set<Fields> fields = new HashSet<Fields>();
+    List<Comparable> fieldNames = new ArrayList<Comparable>();
 
     Child[] taps = getTaps();
 
     boolean useAll = false;
     for( int i = 0, sz = taps.length; i < sz; i++ )
       {
-        Fields fields = taps[ i ].getSinkFields();
-      if ( fields.isAll() ) {
+        Fields sinkFields = taps[ i ].getSinkFields();
+      if ( sinkFields.isAll() ) {
         useAll = true;
         break;
       }
-      for( Object o : fields )
+      for( Object o : sinkFields )
         fieldNames.add( (Comparable) o );
       }
 
