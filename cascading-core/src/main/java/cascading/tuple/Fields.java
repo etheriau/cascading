@@ -37,6 +37,7 @@ import java.util.Map;
 import java.util.Set;
 
 import cascading.tap.Tap;
+import cascading.tuple.type.CoercibleType;
 import cascading.util.Util;
 
 /**
@@ -188,6 +189,29 @@ public class Fields implements Comparable, Iterable<Comparable>, Serializable, C
     }
 
   /**
+   * Method size is a factory that makes new instances of Fields the given size with every field
+   * of the given type.
+   *
+   * @param size of type int
+   * @param type of type Type
+   * @return Fields
+   */
+  public static Fields size( int size, Type type )
+    {
+    if( size == 0 )
+      return Fields.NONE;
+
+    Fields fields = new Fields();
+
+    fields.fields = expand( size, 0 );
+
+    for( Comparable field : fields )
+      fields.applyType( field, type );
+
+    return fields;
+    }
+
+  /**
    * Method join joins all given Fields instances into a new Fields instance.
    * <p/>
    * Use caution with this method, it does not assume the given Fields are either selectors or declarators. Numeric position fields are left untouched.
@@ -311,17 +335,27 @@ public class Fields implements Comparable, Iterable<Comparable>, Serializable, C
   public static Fields merge( Fields... fields )
     {
     List<Comparable> elements = new ArrayList<Comparable>();
+    List<Type> elementTypes = new ArrayList<Type>();
 
     for( Fields field : fields )
       {
       for( Comparable comparable : field )
         {
         if( !elements.contains( comparable ) )
+          {
           elements.add( comparable );
+          elementTypes.add( field.getType( comparable ) );
+          }
         }
       }
 
-    return new Fields( elements.toArray( new Comparable[ elements.size() ] ) );
+    Comparable[] comparables = elements.toArray( new Comparable[ elements.size() ] );
+    Type[] types = elementTypes.toArray( new Type[ elementTypes.size() ] );
+
+    if( Util.containsNull( types ) )
+      return new Fields( comparables );
+
+    return new Fields( comparables, types );
     }
 
   public static Fields copyComparators( Fields toFields, Fields... fromFields )
@@ -1671,6 +1705,9 @@ public class Fields implements Comparable, Iterable<Comparable>, Serializable, C
 
   /**
    * Returns the Class for the given position value.
+   * <p/>
+   * If the underlying value is of type {@link CoercibleType}, the result of
+   * {@link cascading.tuple.type.CoercibleType#getCanonicalType()} will returned.
    *
    * @param fieldName of type String or Number
    * @return type Class
@@ -1682,7 +1719,12 @@ public class Fields implements Comparable, Iterable<Comparable>, Serializable, C
 
   public Class getTypeClass( int pos )
     {
-    return (Class) getType( pos );
+    Type type = getType( pos );
+
+    if( type instanceof CoercibleType )
+      return ( (CoercibleType) type ).getCanonicalType();
+
+    return (Class) type;
     }
 
   protected void setType( int pos, Type type )
@@ -1706,7 +1748,8 @@ public class Fields implements Comparable, Iterable<Comparable>, Serializable, C
   /**
    * Returns a copy of the current types Class[] if any, else null.
    * <p/>
-   * May fail if all types are not an instance of {@link Class}.
+   * If any underlying value is of type {@link CoercibleType}, the result of
+   * {@link cascading.tuple.type.CoercibleType#getCanonicalType()} will returned.
    *
    * @return of type Class
    */
@@ -1718,7 +1761,12 @@ public class Fields implements Comparable, Iterable<Comparable>, Serializable, C
     Class[] classes = new Class[ types.length ];
 
     for( int i = 0; i < types.length; i++ )
-      classes[ i ] = (Class) types[ i ]; // this throws a more helpful exception vs arraycopy
+      {
+      if( types[ i ] instanceof CoercibleType )
+        classes[ i ] = ( (CoercibleType) types[ i ] ).getCanonicalType();
+      else
+        classes[ i ] = (Class) types[ i ]; // this throws a more helpful exception vs arraycopy
+      }
 
     return classes;
     }

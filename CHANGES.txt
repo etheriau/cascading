@@ -1,6 +1,27 @@
 Cascading Change Log
 
-2.2.0 [unreleased]
+2.2.1 [unreleased]
+
+  Fixed issue where resolved fields were not properly presented to c.t.MultiSinkTap child c.t.Tap and c.s.Scheme
+  instances preventing header information from being written in the case of TextDelimited files.
+
+  Fixed issue where the number of fields parsed by c.s.u.DelimitedParser were greater than those declared could cause
+  an j.l.ArrayIndexOutOfBoundsException.
+
+  Fixed issue where a race condition could cause a NPE between c.c.Cascade#start() and Cascade#stop().
+
+2.2.0
+
+  Fixed issue where c.p.CoGroup in local mode did not properly handle joins where the grouping j.u.Comparator
+  did not treat null values as equal. SQL semantics expect null values to not be equivalent. c.p.HashJoin
+  does not support non-equality between null and will issue a warning.
+
+  Updated c.p.a.AggregateBy sub-classes to pass 0 as default threshold value to allow the system default value
+  to be honored.
+
+  Added c.o.a.MaxValue and c.o.a.MinValue c.o.Aggregator sub-classes to replace c.o.a.Max and c.o.a.Min classes
+  respectively. MaxValue and MinValue rely on the values compared to be j.l.Comparable types resulting in a simpler
+  implementation and support for max/min of non numeric types.
 
   Fixed issue where c.o.t.DateParser would drop incoming Tuples if the argument was null.
 
@@ -109,8 +130,7 @@ Cascading Change Log
 
   Added "test.platform.includes" system property so tests can be limited to specified platforms.
 
-  Added c.p.a.MaxBy and c.p.a.MinBy c.p.a.AggregateBy sub-classes to perform max and min, respectively. If the given
-  result fields declare a type, the result will be coerced to that type.
+  Added c.p.a.MaxBy and c.p.a.MinBy c.p.a.AggregateBy sub-classes to perform max and min, respectively.
 
   Updated c.p.a.SumBy and c.p.a.AverageBy to honor result fields type declaration by coercing the result to the
   declared type.

@@ -24,8 +24,8 @@ import java.beans.ConstructorProperties;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashSet;
 import java.util.Iterator;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -45,6 +45,9 @@ import org.slf4j.LoggerFactory;
  * multiple child {@link cascading.tap.Tap} instances simultaneously.
  * <p/>
  * It is the counterpart to {@link cascading.tap.MultiSourceTap}.
+ * <p/>
+ * Note all child Tap instances may or may not have the same declared Fields. In the case they do not, all
+ * sink fields will be merged into a single Fields instance via {@link Fields#merge(cascading.tuple.Fields...)}.
  */
 public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Config, Output>
   implements CompositeTap<Child>
@@ -153,6 +156,13 @@ public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Con
     }
 
   @Override
+  public void presentSinkFields( FlowProcess<Config> flowProcess, Fields fields )
+    {
+    for( Tap child : getTaps() )
+      child.presentSinkFields( flowProcess, fields );
+    }
+
+  @Override
   public TupleEntryCollector openForWrite( FlowProcess<Config> flowProcess, Output output ) throws IOException
     {
     return new MultiSinkCollector( flowProcess, getTaps() );
@@ -251,7 +261,7 @@ public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Con
     if( super.getScheme() != null )
       return super.getScheme();
 
-    Set<Comparable> fieldNames = new LinkedHashSet<Comparable>();
+    Set<Fields> fields = new HashSet<Fields>();
 
     Child[] taps = getTaps();
 
