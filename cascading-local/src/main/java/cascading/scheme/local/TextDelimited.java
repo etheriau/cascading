@@ -107,7 +107,7 @@ import cascading.tuple.util.TupleViews;
  *
  * @see TextLine
  */
-public class TextDelimited extends Scheme<Properties, InputStream, OutputStream, LineNumberReader, PrintWriter>
+public class TextDelimited extends Scheme<Properties, InputStream, OutputStream, LineReaderInputStreamLineReader, PrintWriter>
   {
   public static final String DEFAULT_CHARSET = "UTF-8";
 
@@ -637,28 +637,27 @@ public class TextDelimited extends Scheme<Properties, InputStream, OutputStream,
     }
 
   @Override
-  public void sourcePrepare( FlowProcess<Properties> flowProcess, SourceCall<LineNumberReader, InputStream> sourceCall ) throws IOException
+  public void sourcePrepare( FlowProcess<Properties> flowProcess, SourceCall<LineReaderInputStreamLineReader, InputStream> sourceCall ) throws IOException
     {
-    sourceCall.setContext( createInput( sourceCall.getInput() ) );
+    sourceCall.setContext( new LineReaderInputStreamLineReader( createInput( sourceCall.getInput() ) ) );
 
     sourceCall.getIncomingEntry().setTuple( TupleViews.createObjectArray() );
     }
 
   @Override
-  public boolean source( FlowProcess<Properties> flowProcess, SourceCall<LineNumberReader, InputStream> sourceCall ) throws IOException
+  public boolean source( FlowProcess<Properties> flowProcess, SourceCall<LineReaderInputStreamLineReader, InputStream> sourceCall ) throws IOException
     {
-    String line = sourceCall.getContext().readLine();
+    Object [] split = delimitedParser.parseLine( sourceCall.getContext() );
+    if ( split == null ) {
+       return false;
+    }
 
-    if( line == null )
-      return false;
-
-    if( skipHeader && sourceCall.getContext().getLineNumber() == 1 ) // todo: optimize this away
-      line = sourceCall.getContext().readLine();
-
-    if( line == null )
-      return false;
-
-    Object[] split = delimitedParser.parseLine( line );
+    if( skipHeader && sourceCall.getContext().isFirstLine() ) { // todo: optimize this away
+       split = delimitedParser.parseLine( sourceCall.getContext() );
+       if ( split == null ) {
+          return false;
+       }
+    }
 
     // assumption it is better to re-use than to construct new
     Tuple tuple = sourceCall.getIncomingEntry().getTuple();
@@ -669,7 +668,7 @@ public class TextDelimited extends Scheme<Properties, InputStream, OutputStream,
     }
 
   @Override
-  public void sourceCleanup( FlowProcess<Properties> flowProcess, SourceCall<LineNumberReader, InputStream> sourceCall ) throws IOException
+  public void sourceCleanup( FlowProcess<Properties> flowProcess, SourceCall<LineReaderInputStreamLineReader, InputStream> sourceCall ) throws IOException
     {
     sourceCall.setContext( null );
     }

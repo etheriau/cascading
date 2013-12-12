@@ -11,3 +11,9 @@ javadoc
 .idea
 *.iml
 .gradle
+
+// Eclipse
+.settings
+.project
+.classpath
+bin
