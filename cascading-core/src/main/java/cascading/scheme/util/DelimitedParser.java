@@ -28,18 +28,18 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.regex.Pattern;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import cascading.flow.FlowProcess;
 import cascading.tap.Tap;
 import cascading.tap.TapException;
 import cascading.tuple.Fields;
 import cascading.tuple.Tuple;
-import cascading.tuple.TupleEntry;
 import cascading.tuple.TupleEntryIterator;
 import cascading.tuple.coerce.Coercions;
 import cascading.tuple.type.CoercibleType;
 import cascading.util.Util;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  * Class DelimitedParser is a base class for parsing text delimited files.
@@ -51,6 +51,8 @@ import org.slf4j.LoggerFactory;
  */
 public class DelimitedParser implements Serializable
   {
+  private static final long serialVersionUID = -5444877974576396146L;
+
   /** Field LOG */
   private static final Logger LOG = LoggerFactory.getLogger( DelimitedParser.class );
 
@@ -296,12 +298,10 @@ public class DelimitedParser implements Serializable
 
       iterator = tap.openForRead( flowProcess );
 
-      TupleEntry entry = iterator.hasNext() ? iterator.next() : null;
-
-      if( entry == null )
-        throw new TapException( "unable to read fields from tap: " + tap + ", is empty" );
-
-      Object[] result = onlyParseLine( entry.getTuple().getString( 0 ) ); // don't coerce if type info is avail
+      Object[] result = onlyParseLine( new TupleEntryLineReader( iterator ), new StringBuilder() ); // don't coerce if type info is avail
+      if ( result == null ) {
+         throw new TapException( "unable to read fields from tap: " + tap + ", is empty" );
+      }
 
       result = cleanParsedLine( result );
 
@@ -336,13 +336,17 @@ public class DelimitedParser implements Serializable
     return sourceFields;
     }
 
-  public Object[] parseLine( String line )
+  public Object[] parseLine( LineReader reader ) throws IOException
     {
-    Object[] split = onlyParseLine( line );
+    StringBuilder line = new StringBuilder();
+    Object[] split = onlyParseLine( reader, line );
+    if ( split == null ) {
+       return null;
+    }
 
     split = cleanParsedLine( split );
 
-    return coerceParsedLine( line, split );
+    return coerceParsedLine( line.toString(), split );
     }
 
   protected Object[] cleanParsedLine( Object[] split )
@@ -381,16 +385,46 @@ public class DelimitedParser implements Serializable
     return split;
     }
 
-  protected Object[] onlyParseLine( String line )
-    {
-    Object[] split = createSplit( line, splitPattern, numValues == 0 ? 0 : -1 );
+  protected Object[] onlyParseLine( LineReader reader, StringBuilder fullLineRead )
+    throws IOException {
+
+     Object[] split = null;
+     while ( true ) {
+        String line = reader.readLine();
+        if ( line == null ) {
+           break;
+        }
+
+        // Preserve what we read for the reader
+        if ( fullLineRead.length() != 0 ) {
+           fullLineRead.append( "\n" );
+        }
+        fullLineRead.append( line );
+
+        split = createSplit( fullLineRead.toString(), splitPattern, numValues == 0 ? 0 : -1 );
+
+        // Grab the last split item -- if it starts with a quote but doesn't end with one AND we're still
+        // looking for some data, continue.
+        //TODO: Perhaps some sanity checks on the stream?
+        if ( split.length < numValues ) {
+           // OK, let's continue
+           continue;
+        }
+
+        // Invariant: let's give up.
+        break;
+     }
+
+     if ( split == null ) {
+        return null;
+     }
 
     if( numValues != 0 && split.length != numValues )
       {
       String message = "did not parse correct number of values from input data, expected: " + numValues + ", got: " + split.length + ":" + Util.join( ",", (String[]) split );
 
       if( enforceStrict )
-        throw new TapException( message, new Tuple( line ) ); // trap actual line data
+        throw new TapException( message, new Tuple( fullLineRead.toString() ) ); // trap actual line data
 
       LOG.warn( message );
 
@@ -441,6 +475,9 @@ public class DelimitedParser implements Serializable
 
         if( valueString.contains( quote ) )
           valueString = valueString.replaceAll( quote, quote + quote );
+        if ( valueString.contains( "\n" ) ) {
+           valueString = valueString.replaceAll( "\n", "" );
+        }
 
         if( valueString.contains( delimiter ) || valueString.contains( "\n" ) )
           valueString = quote + valueString + quote;
