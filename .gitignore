@@ -14,3 +14,8 @@ javadoc
 *.iws
 .gradle
 target
+// Eclipse
+.settings
+.project
+.classpath
+bin
