@@ -27,12 +27,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.LinkedHashSet;
 import java.util.Properties;
-<<<<<<< HEAD
 import java.util.Set;
-=======
 import java.util.zip.GZIPInputStream;
 import java.util.zip.GZIPOutputStream;
->>>>>>> wip-2.2
 
 import cascading.flow.FlowProcess;
 import cascading.scheme.Scheme;
