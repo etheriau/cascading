@@ -962,7 +962,11 @@ public class Cascade implements UnitOfWork<CascadeStats>
         {
         public String getEdgeName( BaseFlow.FlowHolder object )
           {
-          return object.flow.getName().replaceAll( "\"", "\'" ).replaceAll( "\n", "\\\\n" ); // fix for newlines in graphviz
+          String name = object.flow.getName();
+          if ( name == null ) {
+             name = "null";
+          }
+          return name.replaceAll( "\"", "\'" ).replaceAll( "\n", "\\\\n" ); // fix for newlines in graphviz
           }
         }
       );
