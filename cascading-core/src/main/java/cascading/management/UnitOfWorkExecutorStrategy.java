@@ -28,6 +28,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import cascading.CascadingThreadFactory;
+
 /**
  * Class UnitOfWorkExecutorStrategy uses a simple {@link Executors#newFixedThreadPool(int)} {@link ExecutorService}
  * to spawn threads.
@@ -40,7 +42,7 @@ public class UnitOfWorkExecutorStrategy implements UnitOfWorkSpawnStrategy
 
   public List<Future<Throwable>> start( UnitOfWork unitOfWork, int maxConcurrentThreads, Collection<Callable<Throwable>> values ) throws InterruptedException
     {
-    executor = Executors.newFixedThreadPool( maxConcurrentThreads );
+    executor = CascadingThreadFactory.createNewFixedExecutorService( maxConcurrentThreads );
 
     List<Future<Throwable>> futures = executor.invokeAll( values ); // todo: consider submit()
 

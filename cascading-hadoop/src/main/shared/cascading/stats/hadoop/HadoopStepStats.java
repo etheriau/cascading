@@ -36,11 +36,13 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import cascading.CascadingThreadFactory;
 import cascading.flow.FlowException;
 import cascading.flow.FlowStep;
 import cascading.management.state.ClientState;
 import cascading.stats.FlowStepStats;
 import cascading.util.Util;
+
 import org.apache.hadoop.mapred.Counters;
 import org.apache.hadoop.mapred.JobClient;
 import org.apache.hadoop.mapred.JobConf;
@@ -324,12 +326,12 @@ public abstract class HadoopStepStats extends FlowStepStats
 
   // hardcoded at one thread to force serialization across all requesters in the jvm
   // this likely prevents the deadlocks the futures are safeguards against
-  private static ExecutorService futuresPool = Executors.newSingleThreadExecutor( new ThreadFactory()
+  private static ExecutorService futuresPool = CascadingThreadFactory.createSingleThreadExecutor( new ThreadFactory()
   {
   @Override
   public Thread newThread( Runnable runnable )
     {
-    Thread thread = new Thread( runnable, "stats-futures" );
+    Thread thread = CascadingThreadFactory.createThread( runnable, "stats-futures" );
 
     thread.setDaemon( true );
 

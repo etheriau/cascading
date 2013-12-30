@@ -23,17 +23,18 @@ package cascading.flow.local.planner;
 import java.io.IOException;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import cascading.CascadingThreadFactory;
 import cascading.flow.local.LocalFlowProcess;
 import cascading.flow.local.LocalFlowStep;
 import cascading.flow.planner.FlowStepJob;
 import cascading.management.state.ClientState;
 import cascading.stats.FlowStepStats;
 import cascading.stats.local.LocalStepStats;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -79,7 +80,7 @@ public class LocalFlowStepJob extends FlowStepJob<Properties>
   @Override
   protected void internalNonBlockingStart() throws IOException
     {
-    ExecutorService executors = Executors.newFixedThreadPool( 1 );
+    ExecutorService executors = CascadingThreadFactory.createNewFixedExecutorService( 1 );
 
     future = executors.submit( stackRunner );
 
