@@ -495,9 +495,6 @@ public class DelimitedParser implements Serializable
 
         if( valueString.contains( quote ) )
           valueString = valueString.replaceAll( quote, quote + quote );
-        if ( valueString.contains( "\n" ) ) {
-           valueString = valueString.replaceAll( "\n", "" );
-        }
 
         if( valueString.contains( delimiter ) || valueString.contains( "\n" ) )
           valueString = quote + valueString + quote;
