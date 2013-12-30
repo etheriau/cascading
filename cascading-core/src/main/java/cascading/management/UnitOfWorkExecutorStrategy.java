@@ -20,6 +20,7 @@
 
 package cascading.management;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -37,32 +38,35 @@ import cascading.CascadingThreadFactory;
  * This is the default spawn strategy.
  */
 public class UnitOfWorkExecutorStrategy implements UnitOfWorkSpawnStrategy
-  {
+{
   private ExecutorService executor;
 
   public List<Future<Throwable>> start( UnitOfWork unitOfWork, int maxConcurrentThreads, Collection<Callable<Throwable>> values ) throws InterruptedException
-    {
+  {
     executor = CascadingThreadFactory.createNewFixedExecutorService( maxConcurrentThreads );
 
-    List<Future<Throwable>> futures = executor.invokeAll( values ); // todo: consider submit()
+    List<Future<Throwable>> futures = new ArrayList<Future<Throwable>>( values.size() );
+    for ( Callable t : values ) {
+      futures.add( executor.submit( t ) );
+    }
 
     executor.shutdown(); // don't accept any more work
 
     return futures;
-    }
+  }
 
   @Override
   public boolean isCompleted( UnitOfWork unitOfWork )
-    {
+  {
     return executor == null || executor.isTerminated();
-    }
+  }
 
   @Override
   public void complete( UnitOfWork unitOfWork, int duration, TimeUnit unit ) throws InterruptedException
-    {
+  {
     if( executor == null )
       return;
 
     executor.awaitTermination( duration, unit );
-    }
   }
+}
