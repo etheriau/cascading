@@ -38,6 +38,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import cascading.CascadingException;
+import cascading.CascadingThreadFactory;
 import cascading.cascade.planner.FlowGraph;
 import cascading.cascade.planner.IdentifierGraph;
 import cascading.cascade.planner.TapGraph;
@@ -55,6 +56,7 @@ import cascading.tap.Tap;
 import cascading.util.ShutdownUtil;
 import cascading.util.Util;
 import cascading.util.Version;
+
 import org.jgrapht.Graphs;
 import org.jgrapht.ext.EdgeNameProvider;
 import org.jgrapht.ext.IntegerNameProvider;
@@ -662,7 +664,7 @@ public class Cascade implements UnitOfWork<CascadeStats>
     if( thread != null )
       return;
 
-    thread = new Thread( new Runnable()
+    thread = CascadingThreadFactory.createThread( new Runnable()
     {
     @Override
     public void run()

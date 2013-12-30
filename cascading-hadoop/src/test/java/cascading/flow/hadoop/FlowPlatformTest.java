@@ -29,6 +29,7 @@ import java.util.concurrent.Future;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 
+import cascading.CascadingThreadFactory;
 import cascading.PlatformTestCase;
 import cascading.flow.FailingFlowListener;
 import cascading.flow.Flow;
@@ -57,12 +58,12 @@ import cascading.tap.Tap;
 import cascading.tap.hadoop.Hfs;
 import cascading.tap.hadoop.Lfs;
 import cascading.tuple.Fields;
+
 import org.apache.hadoop.mapred.JobConf;
 import org.junit.Test;
 
 import static data.InputData.inputFileLower;
 import static data.InputData.inputFileUpper;
-import static java.util.concurrent.Executors.newSingleThreadExecutor;
 
 /**
  *
@@ -214,7 +215,7 @@ public class FlowPlatformTest extends PlatformTestCase
     final Semaphore start = new Semaphore( 0 );
     final long startTime = System.nanoTime();
 
-    Future<Long> future = newSingleThreadExecutor().submit( new Callable<Long>()
+    Future<Long> future = CascadingThreadFactory.createSingleThreadExecutor().submit( new Callable<Long>()
     {
     @Override
     public Long call() throws Exception

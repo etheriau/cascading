@@ -26,16 +26,17 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import cascading.CascadingThreadFactory;
 import cascading.flow.FlowProcess;
 import cascading.flow.local.LocalFlowStep;
 import cascading.flow.local.stream.LocalStepStreamGraph;
 import cascading.flow.stream.Duct;
 import cascading.flow.stream.StreamGraph;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 /**
  *
@@ -168,7 +169,7 @@ public class LocalStepRunner implements Callable<Throwable>
     {
     // todo: consider a CyclicBarrier to syn all threads after the openForRead
     // todo: should find all Callable Ducts and spawn them, group ducts may run on a timer etc
-    ExecutorService executors = Executors.newFixedThreadPool( heads.size() );
+    ExecutorService executors = CascadingThreadFactory.createNewFixedExecutorService( heads.size() );
     List<Future<Throwable>> futures = new ArrayList<Future<Throwable>>();
 
     for( Duct head : heads )

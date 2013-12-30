@@ -26,6 +26,8 @@ import java.util.PriorityQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import cascading.CascadingThreadFactory;
+
 /**
  * ShutdownUtil is a private helper class for registering dependent shutdown hooks to maintain internal state
  * information reliably when a jvm is shutting down.
@@ -88,7 +90,7 @@ public class ShutdownUtil
     if( shutdownHook != null )
       return;
 
-    shutdownHook = new Thread( "cascading shutdown hooks" )
+    shutdownHook = CascadingThreadFactory.createThread( new Runnable() 
     {
     @Override
     public void run()
@@ -111,7 +113,7 @@ public class ShutdownUtil
           }
         }
       }
-    };
+    }, "cascading shutdown hooks" );
 
     Runtime.getRuntime().addShutdownHook( shutdownHook );
     }

@@ -20,6 +20,8 @@
 
 package cascading.flow;
 
+import static org.jgrapht.Graphs.predecessorListOf;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -38,7 +40,19 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
 
+import org.jgrapht.traverse.TopologicalOrderIterator;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import riffle.process.DependencyIncoming;
+import riffle.process.DependencyOutgoing;
+import riffle.process.ProcessCleanup;
+import riffle.process.ProcessComplete;
+import riffle.process.ProcessPrepare;
+import riffle.process.ProcessStart;
+import riffle.process.ProcessStop;
 import cascading.CascadingException;
+import cascading.CascadingThreadFactory;
 import cascading.cascade.Cascade;
 import cascading.flow.planner.BaseFlowStep;
 import cascading.flow.planner.ElementGraph;
@@ -60,18 +74,6 @@ import cascading.util.ShutdownUtil;
 import cascading.util.Update;
 import cascading.util.Util;
 import cascading.util.Version;
-import org.jgrapht.traverse.TopologicalOrderIterator;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import riffle.process.DependencyIncoming;
-import riffle.process.DependencyOutgoing;
-import riffle.process.ProcessCleanup;
-import riffle.process.ProcessComplete;
-import riffle.process.ProcessPrepare;
-import riffle.process.ProcessStart;
-import riffle.process.ProcessStop;
-
-import static org.jgrapht.Graphs.predecessorListOf;
 
 @riffle.process.Process
 public abstract class BaseFlow<Config> implements Flow<Config>
@@ -773,7 +775,7 @@ public abstract class BaseFlow<Config> implements Flow<Config>
 
   protected Thread createFlowThread( String threadName )
     {
-    return new Thread( new Runnable()
+    return CascadingThreadFactory.createThread( new Runnable()
     {
     @Override
     public void run()
