@@ -286,7 +286,7 @@ public class DelimitedParser implements Serializable
     return split;
     }
 
-  public Fields parseFirstLine( FlowProcess flowProcess, Tap tap )
+  public Fields parseFirstLine( FlowProcess flowProcess, Tap tap, boolean onlyReadOne )
     {
     Fields sourceFields;
     TupleEntryIterator iterator = null;
@@ -298,7 +298,7 @@ public class DelimitedParser implements Serializable
 
       iterator = tap.openForRead( flowProcess );
 
-      Object[] result = onlyParseLine( new TupleEntryLineReader( iterator ), new StringBuilder() ); // don't coerce if type info is avail
+      Object[] result = onlyParseLine( new TupleEntryLineReader( iterator ), new StringBuilder(), onlyReadOne ); // don't coerce if type info is avail
       if ( result == null ) {
          throw new TapException( "unable to read fields from tap: " + tap + ", is empty" );
       }
@@ -336,10 +336,10 @@ public class DelimitedParser implements Serializable
     return sourceFields;
     }
 
-  public Object[] parseLine( LineReader reader ) throws IOException
+  public Object[] parseLine( LineReader reader, boolean onlyReadOne ) throws IOException
     {
     StringBuilder line = new StringBuilder();
-    Object[] split = onlyParseLine( reader, line );
+    Object[] split = onlyParseLine( reader, line, onlyReadOne );
     if ( split == null ) {
        return null;
     }
@@ -398,7 +398,7 @@ public class DelimitedParser implements Serializable
       }
     }
 
-  protected Object[] onlyParseLine( LineReader reader, StringBuilder fullLineRead )
+  protected Object[] onlyParseLine( LineReader reader, StringBuilder fullLineRead, boolean onlyReadOne )
     throws IOException {
 
      Object[] split = null;
@@ -421,6 +421,9 @@ public class DelimitedParser implements Serializable
         //TODO: Perhaps some sanity checks on the stream?
         if ( split.length < numValues ) {
            // OK, let's continue
+           if ( onlyReadOne ) {
+               break;
+           }
            continue;
         }
 
