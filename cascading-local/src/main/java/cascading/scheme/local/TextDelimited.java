@@ -613,7 +613,7 @@ public class TextDelimited extends Scheme<Properties, InputStream, OutputStream,
 
     tap = new FileTap( new TextLine( new Fields( "line" ), charsetName ), tap.getIdentifier() );
 
-    setSourceFields( delimitedParser.parseFirstLine( process, tap ) );
+    setSourceFields( delimitedParser.parseFirstLine( process, tap, false ) );
 
     return getSourceFields();
     }
@@ -647,13 +647,13 @@ public class TextDelimited extends Scheme<Properties, InputStream, OutputStream,
   @Override
   public boolean source( FlowProcess<Properties> flowProcess, SourceCall<LineReaderInputStreamLineReader, InputStream> sourceCall ) throws IOException
     {
-    Object [] split = delimitedParser.parseLine( sourceCall.getContext() );
+    Object [] split = delimitedParser.parseLine( sourceCall.getContext(), false );
     if ( split == null ) {
        return false;
     }
 
     if( skipHeader && sourceCall.getContext().isFirstLine() ) { // todo: optimize this away
-       split = delimitedParser.parseLine( sourceCall.getContext() );
+       split = delimitedParser.parseLine( sourceCall.getContext(), false );
        if ( split == null ) {
           return false;
        }

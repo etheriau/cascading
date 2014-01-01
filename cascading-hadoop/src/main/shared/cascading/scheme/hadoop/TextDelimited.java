@@ -966,7 +966,7 @@ public class TextDelimited extends TextLine
     // should revert to file:// (Lfs) if tap is Lfs
     tap = new Hfs( new TextLine( new Fields( "line" ), charsetName ), tap.getFullIdentifier( flowProcess.getConfigCopy() ) );
 
-    setSourceFields( delimitedParser.parseFirstLine( flowProcess, tap ) );
+    setSourceFields( delimitedParser.parseFirstLine( flowProcess, tap, false ) );
 
     return getSourceFields();
     }
@@ -1001,14 +1001,14 @@ public class TextDelimited extends TextLine
     Object[] context = sourceCall.getContext();
 
     LineReader reader = (LineReader) context[3];
-    Object [] split = delimitedParser.parseLine( reader );
+    Object [] split = delimitedParser.parseLine( reader, false );
     if ( split == null ) {
        return false;
     }
 
     if( skipHeader && reader.isFirstLine() )
       {
-       split = delimitedParser.parseLine( reader );
+       split = delimitedParser.parseLine( reader, false );
        if ( split == null ) {
           return false;
        }
