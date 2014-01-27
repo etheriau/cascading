@@ -20,6 +20,8 @@
 
 package cascading.management.state;
 
+import java.io.Serializable;
+
 import cascading.cascade.Cascade;
 import cascading.flow.Flow;
 import cascading.flow.FlowStep;
@@ -28,12 +30,16 @@ import cascading.stats.CascadingStats;
 /**
  *
  */
-public abstract class ClientState extends BaseState
+public abstract class ClientState extends BaseState implements Serializable
   {
+  private static final long serialVersionUID = -4463759084440226838L;
+
   public static final String STATE_SERVICE_CLASS_PROPERTY = "cascading.management.state.service.classname";
 
   public static ClientState NULL = new ClientState()
   {
+  private static final long serialVersionUID = -5451110128435853848L;
+
   @Override
   public void start( long time )
     {
