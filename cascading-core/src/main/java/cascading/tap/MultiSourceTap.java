@@ -50,7 +50,7 @@ public class MultiSourceTap<Child extends Tap, Config, Input> extends SourceTap<
   private final String identifier = "__multisource_placeholder_" + Util.createUniqueID();
   protected Child[] taps;
 
-  private class TupleIterator implements Iterator
+  private static class TupleIterator implements Iterator
     {
     final TupleEntryIterator iterator;
 
@@ -76,6 +76,10 @@ public class MultiSourceTap<Child extends Tap, Config, Input> extends SourceTap<
       {
       iterator.remove();
       }
+
+    public void close() throws IOException {
+    	iterator.close();
+    }
     }
 
   protected MultiSourceTap( Scheme<Config, Input, ?, ?, ?> scheme )
@@ -201,10 +205,18 @@ public class MultiSourceTap<Child extends Tap, Config, Input> extends SourceTap<
     if( input != null )
       return taps[ 0 ].openForRead( flowProcess, input );
 
-    Iterator iterators[] = new Iterator[ getTaps().length ];
+    TupleIterator iterators[] = new TupleIterator[ getTaps().length ];
 
-    for( int i = 0; i < getTaps().length; i++ )
-      iterators[ i ] = new TupleIterator( getTaps()[ i ].openForRead( flowProcess ) );
+    for( int i = 0; i < getTaps().length; i++ ) {
+    	try {
+    		iterators[ i ] = new TupleIterator( getTaps()[ i ].openForRead( flowProcess ) );
+    	} catch ( IOException ioe ) {
+    		for ( int j = 0; j < i; ++ j ) {
+    			iterators[j].close();
+    		}
+    		throw ioe;
+    	}
+    }
 
     return new TupleEntryChainIterator( getSourceFields(), iterators );
     }

@@ -78,12 +78,20 @@ public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Con
         Tap tap = taps[ i ];
         LOG.info( "opening for write: {}", tap.toString() );
 
-        collectors[ i ] = tap.openForWrite( flowProcess.copyWith( mergedConf ), null );
-        if( tap.getSinkFields().isAll() )
-          {
-          Fields fields = getSinkFields();
-          collectors[ i ].setFields( fields );
-          }
+        try {
+          collectors[ i ] = tap.openForWrite( flowProcess.copyWith( mergedConf ), null );
+          if( tap.getSinkFields().isAll() )
+            {
+              Fields fields = getSinkFields();
+              collectors[ i ].setFields( fields );
+            }
+        } catch ( IOException ioe ) {
+        	for ( int j = 0; j < i; ++ j ) {
+        		collectors[j].close();
+        	}
+        	throw ioe;
+        }
+        
         }
       }
 
