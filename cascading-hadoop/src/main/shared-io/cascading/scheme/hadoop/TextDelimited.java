@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2007-2017 Xplenty, Inc. All Rights Reserved.
+ * Copyright (c) 2007-2013 Concurrent, Inc. All Rights Reserved.
  *
  * Project and contact information: http://www.cascading.org/
  *
@@ -23,6 +23,7 @@ package cascading.scheme.hadoop;
 import java.beans.ConstructorProperties;
 import java.io.IOException;
 import java.nio.charset.Charset;
+import java.util.Arrays;
 
 import cascading.flow.FlowProcess;
 import cascading.management.annotation.Property;
@@ -31,6 +32,7 @@ import cascading.management.annotation.Visibility;
 import cascading.scheme.SinkCall;
 import cascading.scheme.SourceCall;
 import cascading.scheme.util.DelimitedParser;
+import cascading.scheme.util.LineReader;
 import cascading.tap.CompositeTap;
 import cascading.tap.Tap;
 import cascading.tap.TapException;
@@ -40,8 +42,8 @@ import cascading.tuple.Tuple;
 import cascading.tuple.TupleEntry;
 import cascading.tuple.util.TupleViews;
 import org.apache.hadoop.conf.Configuration;
-import org.apache.hadoop.io.LongWritable;
 import org.apache.hadoop.io.Text;
+import org.apache.hadoop.mapred.JobConf;
 import org.apache.hadoop.mapred.OutputCollector;
 import org.apache.hadoop.mapred.RecordReader;
 
@@ -970,9 +972,9 @@ public class TextDelimited extends TextLine
       tap = (Tap) ( (CompositeTap) tap ).getChildTaps().next();
 
     // should revert to file:// (Lfs) if tap is Lfs
-    tap = new Hfs( new TextLine( new Fields( "line" ), charsetName ), tap.getFullIdentifier( flowProcess ) );
+    tap = new Hfs( new TextLine( new Fields( "line" ), charsetName ), tap.getFullIdentifier( flowProcess.getConfigCopy() ) );
 
-    setSourceFields( delimitedParser.parseFirstLine( flowProcess, tap ) );
+    setSourceFields( delimitedParser.parseFirstLine( flowProcess, tap, false ) );
 
     return getSourceFields();
     }
@@ -994,6 +996,10 @@ public class TextDelimited extends TextLine
     {
     super.sourcePrepare( flowProcess, sourceCall );
 
+    Object [] newContext = Arrays.copyOf( sourceCall.getContext(), sourceCall.getContext().length + 1 );
+    newContext[ sourceCall.getContext().length ] = new RecordReaderLineReader( sourceCall.getInput(), sourceCall.getContext() );
+    sourceCall.setContext( newContext );
+
     sourceCall.getIncomingEntry().setTuple( TupleViews.createObjectArray() );
     }
 
@@ -1002,17 +1008,21 @@ public class TextDelimited extends TextLine
     {
     Object[] context = sourceCall.getContext();
 
-    if( !sourceCall.getInput().next( context[ 0 ], context[ 1 ] ) )
-      return false;
+    LineReader reader = (LineReader) context[3];
+    Object [] split = delimitedParser.parseLine( reader, false );
+    if ( split == null ) {
+       return false;
+    }
 
-    if( skipHeader && ( (LongWritable) context[ 0 ] ).get() == 0 )
+    if( skipHeader && reader.isFirstLine() )
       {
-      if( !sourceCall.getInput().next( context[ 0 ], context[ 1 ] ) )
-        return false;
+       split = delimitedParser.parseLine( reader, false );
+       if ( split == null ) {
+          return false;
+       }
       }
 
     // delegate coercion to delimitedParser for robustness
-    Object[] split = delimitedParser.parseLine( makeEncodedString( context ) );
     Tuple tuple = sourceCall.getIncomingEntry().getTuple();
 
     TupleViews.reset( tuple, split );

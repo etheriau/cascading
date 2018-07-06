@@ -24,11 +24,9 @@ import java.beans.ConstructorProperties;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 import cascading.flow.FlowProcess;
 import cascading.scheme.NullScheme;
@@ -49,7 +47,8 @@ import org.slf4j.LoggerFactory;
  * Note all child Tap instances may or may not have the same declared Fields. In the case they do not, all
  * sink fields will be merged into a single Fields instance via {@link Fields#merge(cascading.tuple.Fields...)}.
  */
-public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Config, Output> implements CompositeTap<Child>
+public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Config, Output>
+  implements CompositeTap<Child>
   {
   /** Field LOG */
   private static final Logger LOG = LoggerFactory.getLogger( MultiSinkTap.class );
@@ -80,6 +79,11 @@ public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Con
         LOG.info( "opening for write: {}", tap.toString() );
 
         collectors[ i ] = tap.openForWrite( flowProcess.copyWith( mergedConf ), null );
+        if( tap.getSinkFields().isAll() )
+          {
+          Fields fields = getSinkFields();
+          collectors[ i ].setFields( fields );
+          }
         }
       }
 
@@ -260,21 +264,42 @@ public class MultiSinkTap<Child extends Tap, Config, Output> extends SinkTap<Con
     if( super.getScheme() != null )
       return super.getScheme();
 
-    Set<Fields> fields = new HashSet<Fields>();
+    List<Comparable> fieldNames = new ArrayList<Comparable>();
 
-    for( Tap child : getTaps() )
-      fields.add( child.getSinkFields() );
+    Child[] taps = getTaps();
 
-    // if all schemes have the same sink fields, the just use the scheme
-    if( fields.size() == 1 )
+    boolean useAll = false;
+    for( int i = 0, sz = taps.length; i < sz; i++ )
       {
-      setScheme( getTaps()[ 0 ].getScheme() );
-      return super.getScheme();
+        Fields sinkFields = taps[ i ].getSinkFields();
+      if ( sinkFields.isAll() ) {
+        useAll = true;
+        break;
+      }
+      for( Object o : sinkFields )
+        fieldNames.add( (Comparable) o );
       }
 
-    Fields allFields = Fields.merge( fields.toArray( new Fields[ fields.size() ] ) );
+    Fields allFields = useAll ? Fields.ALL : new Fields( fieldNames.toArray( new Comparable[ fieldNames.size() ] ) );
 
-    setScheme( new NullScheme( allFields, allFields ) );
+    setScheme( new NullScheme( allFields, allFields ) {
+      @Override
+      public void setSourceFields( Fields fields ) {
+        Child[] taps = getTaps();
+        for( int i = 0, sz = taps.length; i < sz; i++ ) {
+          taps[i].getScheme().setSourceFields( fields );
+        }
+      }
+
+
+      @Override
+      public void setSinkFields( Fields fields ) {
+        Child[] taps = getTaps();
+        for( int i = 0, sz = taps.length; i < sz; i++ ) {
+          taps[i].getScheme().setSinkFields( fields );
+        }
+      }
+    });
 
     return super.getScheme();
     }

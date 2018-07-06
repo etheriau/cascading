@@ -32,6 +32,8 @@ import java.util.LinkedHashSet;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.zip.GZIPInputStream;
+import java.util.zip.GZIPOutputStream;
 
 import cascading.flow.FlowProcess;
 import cascading.scheme.Scheme;
@@ -99,8 +101,12 @@ public class FileTap extends Tap<Properties, InputStream, OutputStream> implemen
   @Override
   public TupleEntryIterator openForRead( FlowProcess<? extends Properties> flowProcess, InputStream input ) throws IOException
     {
-    if( input == null )
+    if( input == null ) {
       input = new FileInputStream( getIdentifier() );
+      if ( getIdentifier().toLowerCase().endsWith( ".gz" ) ) {
+        input = new GZIPInputStream( input );
+      }
+    }
 
     return new TupleEntrySchemeIterator<Properties, InputStream>( flowProcess, getScheme(), input, getIdentifier() );
     }
@@ -108,8 +114,12 @@ public class FileTap extends Tap<Properties, InputStream, OutputStream> implemen
   @Override
   public TupleEntryCollector openForWrite( FlowProcess<? extends Properties> flowProcess, OutputStream output ) throws IOException
     {
-    if( output == null )
+    if( output == null ) {
       output = new TapFileOutputStream( getIdentifier(), isUpdate() ); // append if we are in update mode
+      if ( getIdentifier().toLowerCase().endsWith( ".gz" ) ) {
+        output = new GZIPOutputStream( output );
+      }
+    }
 
     return new TupleEntrySchemeCollector<Properties, OutputStream>( flowProcess, getScheme(), output, getIdentifier() );
     }

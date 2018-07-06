@@ -27,6 +27,8 @@ import java.util.concurrent.PriorityBlockingQueue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import cascading.CascadingThreadFactory;
+
 /**
  * ShutdownUtil is a private helper class for registering dependent shutdown hooks to maintain internal state
  * information reliably when a jvm is shutting down.
@@ -97,14 +99,8 @@ public class ShutdownUtil
 
     final boolean isForceNonDaemon = Boolean.getBoolean( SHUTDOWN_FORCE_NON_DAEMON );
 
-    shutdownHook = new Thread( "cascading shutdown hooks" )
+    shutdownHook = CascadingThreadFactory.createThread( new Runnable()
     {
-
-    {
-    if( isForceNonDaemon )
-      this.setDaemon( false );
-    }
-
     @Override
     public void run()
       {
@@ -140,7 +136,7 @@ public class ShutdownUtil
         System.setProperty( SHUTDOWN_EXECUTING, "false" );
         }
       }
-    };
+    }, "cascading shutdown hooks", isForceNonDaemon );
 
     Runtime.getRuntime().addShutdownHook( shutdownHook );
     }

@@ -29,6 +29,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
+import cascading.CascadingThreadFactory;
+
 /**
  * Class UnitOfWorkExecutorStrategy uses a simple {@link Executors#newFixedThreadPool(int)} {@link ExecutorService}
  * to spawn threads.
@@ -36,12 +38,12 @@ import java.util.concurrent.TimeUnit;
  * This is the default spawn strategy.
  */
 public class UnitOfWorkExecutorStrategy implements UnitOfWorkSpawnStrategy
-  {
+{
   private ExecutorService executor;
 
   public List<Future<Throwable>> start( UnitOfWork unitOfWork, int maxConcurrentThreads, Collection<Callable<Throwable>> values ) throws InterruptedException
-    {
-    executor = Executors.newFixedThreadPool( maxConcurrentThreads );
+  {
+    executor = CascadingThreadFactory.createNewFixedExecutorService( maxConcurrentThreads );
 
     List<Future<Throwable>> futures = new ArrayList<>();
 
@@ -51,20 +53,20 @@ public class UnitOfWorkExecutorStrategy implements UnitOfWorkSpawnStrategy
     executor.shutdown(); // don't accept any more work
 
     return futures;
-    }
+  }
 
   @Override
   public boolean isCompleted( UnitOfWork unitOfWork )
-    {
+  {
     return executor == null || executor.isTerminated();
-    }
+  }
 
   @Override
   public void complete( UnitOfWork unitOfWork, int duration, TimeUnit unit ) throws InterruptedException
-    {
+  {
     if( executor == null )
       return;
 
     executor.awaitTermination( duration, unit );
-    }
   }
+}
