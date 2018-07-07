@@ -35,7 +35,7 @@ dependencies {
 
   compile project( ':cascading-core' )
 
-  provided group: 'org.slf4j', name: 'slf4j-api', version: '1.7.5'
+  provided group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
 
   provided( group: 'org.apache.hadoop', name: 'hadoop-core', version: hadoopVersion ) {
     exclude group: 'ant'
@@ -54,7 +54,7 @@ dependencies {
 if( hadoopVersion.startsWith( "1.0." ) )
 {
   dependencies {
-    testCompile group: 'commons-io', name: 'commons-io', version: '2.1'
+    testCompile group: 'commons-io', name: 'commons-io', version: '2.6'
 
     testRuntime 'javax.ws.rs:jsr311-api:1.1.1' // missed dep in hadoop, go figure
   }
@@ -72,7 +72,7 @@ if( hadoopVersion.startsWith( "0.20.205." ) )
 if( hadoopVersion.startsWith( "0.20." ) )
 {
   dependencies {
-    testRuntime group: 'commons-io', name: 'commons-io', version: '2.0.1'
+    testRuntime group: 'commons-io', name: 'commons-io', version: '2.06'
   }
 }
 

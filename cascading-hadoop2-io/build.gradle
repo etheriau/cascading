@@ -36,8 +36,8 @@ dependencies {
   compile project( ':cascading-core' )
 
   // forces update of yarn slf4j dependencies
-  provided group: 'org.slf4j', name: 'slf4j-api', version: '1.7.5'
-  provided group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.5'
+  provided group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
+  provided group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.25'
 
   provided( group: 'org.apache.hadoop', name: 'hadoop-mapreduce-client-core', version: hadoop2Version )
   provided( group: 'org.apache.hadoop', name: 'hadoop-common', version: hadoop2Version )

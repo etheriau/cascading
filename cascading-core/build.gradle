@@ -23,10 +23,10 @@ dependencies {
   compile group: 'riffle', name: 'riffle', version: '1.0.0'
 
   // this prevents a transitive dependency until it is required downstream
-  provided group: 'org.slf4j', name: 'slf4j-api', version: '1.7.5'
-  testCompile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.5'
-  testRuntime group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.5'
-  testRuntime group: 'log4j', name: 'log4j', version: '1.2.16'
+  provided group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
+  testCompile group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
+  testRuntime group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.25'
+  testRuntime group: 'log4j', name: 'log4j', version: '1.2.17'
 }
 
 jar.doFirst {

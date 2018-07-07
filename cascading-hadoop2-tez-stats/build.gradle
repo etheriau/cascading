@@ -37,8 +37,8 @@ dependencies {
   compile project( ':cascading-hadoop2-io' )
 
   // forces update of yarn slf4j dependencies
-  provided group: 'org.slf4j', name: 'slf4j-api', version: '1.7.5'
-  provided group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.5'
+  provided group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
+  provided group: 'org.slf4j', name: 'slf4j-log4j12', version: '1.7.25'
 
   provided( group: 'org.apache.tez', name: 'tez-api', version: tezVersion )
   provided( group: 'org.apache.tez', name: 'tez-dag', version: tezVersion )

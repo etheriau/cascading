@@ -21,9 +21,9 @@
 dependencies {
   compile project( ':cascading-core' )
 
-  compile group: 'org.codehaus.janino', name: 'janino', version: '2.7.6'
+  compile group: 'org.codehaus.janino', name: 'janino', version: '2.7.8'
 
-  provided group: 'org.slf4j', name: 'slf4j-api', version: '1.7.5'
+  provided group: 'org.slf4j', name: 'slf4j-api', version: '1.7.25'
 
   testCompile project( path: ':cascading-core', configuration: 'testArtifacts' )
 }
